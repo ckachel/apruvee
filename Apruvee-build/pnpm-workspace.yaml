@@ -1,9 +1,9 @@
 minimumReleaseAge: 1440
 
 packages:
-  - artifacts/*
+  - artifacts/api-server
+  - artifacts/loanmatch
   - lib/*
-  - lib/integrations/*
   - scripts
 
 catalog:
