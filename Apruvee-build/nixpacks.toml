@@ -11,4 +11,4 @@ cmds = [
 ]
 
 [start]
-cmd = "node artifacts/api-server/dist/index.mjs"
+cmd = "cd lib/db && npx drizzle-kit push --config=drizzle.config.ts && cd ../.. && node artifacts/api-server/dist/index.mjs"
