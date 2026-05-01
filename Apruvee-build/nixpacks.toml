@@ -2,12 +2,12 @@
 nixPkgs = ["nodejs_20"]
 
 [phases.install]
-cmds = ["npm install -g pnpm && pnpm install --no-frozen-lockfile"]
+cmds = ["npm install -g pnpm@9 --force && /root/.npm-global/bin/pnpm install --no-frozen-lockfile || npx pnpm@9 install --no-frozen-lockfile"]
 
 [phases.build]
 cmds = [
-  "cd artifacts/api-server && pnpm run build",
-  "cd artifacts/loanmatch && BASE_PATH=/ pnpm run build"
+  "npx pnpm@9 --filter @workspace/api-server run build",
+  "BASE_PATH=/ npx pnpm@9 --filter @workspace/loanmatch run build"
 ]
 
 [start]
