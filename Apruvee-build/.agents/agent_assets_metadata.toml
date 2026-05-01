@@ -1,0 +1,79 @@
+uploads = []
+
+[[generated]]
+id = "RSmEttOGEAB9r1ZKU9M5z"
+uri = "file://artifacts/loanmatch/src/assets/hero-relief.png"
+type = "image"
+title = "generated_image"
+
+[[outputs]]
+id = "zsjNeENrD9vojtgSZAQ-j"
+uri = "file://attached_assets/exports/apruvee-logo.png"
+type = "image"
+title = "Apruvee Logo - Transparent PNG (2400x600)"
+
+[[outputs]]
+id = "WK7EjXb7DZXzIvBM39n1Z"
+uri = "file://attached_assets/exports/apruvee-logo-white-bg.jpg"
+type = "image"
+title = "Apruvee Logo - White Background JPG"
+
+[[outputs]]
+id = "M5w75QvLt8H9HcVGrE2T3"
+uri = "file://attached_assets/exports/apruvee-icon.png"
+type = "image"
+title = "Apruvee Icon - Square (1024x1024)"
+
+[[outputs]]
+id = "gTulPcGJu1U6LqkQYq7Y9"
+uri = "file://attached_assets/exports/apruvee-logo.svg"
+type = "image"
+title = "Apruvee Logo - SVG (Scalable Vector)"
+
+[[outputs]]
+id = "SiT77c9CO0hJce63hswo5"
+uri = "file://attached_assets/exports/apruvee-media-kit.pdf"
+type = "pdf"
+title = "Apruvee Partnership Media Kit (PDF)"
+
+[[outputs]]
+id = "90cq1qaqk21CNqCBE9OXI"
+uri = "file://attached_assets/exports/apruvee-action-plan.pdf"
+type = "pdf"
+title = "Apruvee Pre-Launch Action Plan (PDF Checklist)"
+
+[[outputs]]
+id = "U_Hmh9MiRQjD3ARmV3sx7"
+uri = "file://docs/affiliate/pepperjam-ascend-application-packet.md"
+type = "text"
+title = "Pepperjam / Ascend — application packet"
+
+[[outputs]]
+id = "ZVc-_sClgh1SlAf0pn1ox"
+uri = "file://docs/affiliate/best-egg-direct-application-packet.md"
+type = "text"
+title = "Best Egg — direct outreach packet"
+
+[[outputs]]
+id = "bXTTnRXd_VHUBVn_wMjMm"
+uri = "file://docs/affiliate/upgrade-direct-application-packet.md"
+type = "text"
+title = "Upgrade — direct outreach packet"
+
+[[outputs]]
+id = "YFagykj21JUq6H-NnU8xk"
+uri = "file://docs/affiliate/lendingtree-leadshares-application-packet.md"
+type = "text"
+title = "LendingTree LeadShares — application packet"
+
+[[outputs]]
+id = "_Lctc7WYznO8KIrBOOM61"
+uri = "file://.local/checklists/open-paid-ad-accounts.md"
+type = "text"
+title = "Ad Account Setup Checklist"
+
+[[outputs]]
+id = "yiWqoHETFEw7t4jtuPBxs"
+uri = "file://CHRIS-TODO.md"
+type = "text"
+title = "Chris to Do — your action items"

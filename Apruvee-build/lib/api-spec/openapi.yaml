@@ -1,0 +1,269 @@
+openapi: 3.1.0
+info:
+  # Do not change the title, if the title changes, the import paths will be broken
+  title: Api
+  version: 0.1.0
+  description: LoanMatch API specification
+servers:
+  - url: /api
+    description: Base API path
+tags:
+  - name: health
+    description: Health operations
+  - name: leads
+    description: Lead capture and management
+  - name: offers
+    description: Lender offer management
+paths:
+  /healthz:
+    get:
+      operationId: healthCheck
+      tags: [health]
+      summary: Health check
+      description: Returns server health status
+      responses:
+        "200":
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+
+  /leads:
+    post:
+      operationId: submitLead
+      tags: [leads]
+      summary: Submit a loan application lead
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateLeadBody"
+      responses:
+        "201":
+          description: Lead created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Lead"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /leads/stats:
+    get:
+      operationId: getLeadStats
+      tags: [leads]
+      summary: Get lead statistics
+      responses:
+        "200":
+          description: Lead stats
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LeadStats"
+
+  /offers:
+    get:
+      operationId: listOffers
+      tags: [offers]
+      summary: List lender offers
+      parameters:
+        - name: loanAmount
+          in: query
+          schema:
+            type: integer
+        - name: creditScore
+          in: query
+          schema:
+            type: string
+        - name: loanPurpose
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: List of lender offers
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/LenderOffer"
+
+components:
+  schemas:
+    HealthStatus:
+      type: object
+      properties:
+        status:
+          type: string
+      required:
+        - status
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+        details:
+          type: string
+      required:
+        - error
+
+    CreateLeadBody:
+      type: object
+      properties:
+        loanAmount:
+          type: integer
+          description: Requested loan amount in dollars
+        loanPurpose:
+          type: string
+          description: Purpose of the loan
+        creditScore:
+          type: string
+          description: Self-reported credit score range
+        annualIncome:
+          type: integer
+          description: Annual income in dollars
+        employmentStatus:
+          type: string
+        firstName:
+          type: string
+        lastName:
+          type: string
+        email:
+          type: string
+        phone:
+          type: string
+        state:
+          type: string
+          description: US state abbreviation
+        consentToContact:
+          type: boolean
+      required:
+        - loanAmount
+        - loanPurpose
+        - creditScore
+        - annualIncome
+        - employmentStatus
+        - firstName
+        - lastName
+        - email
+        - consentToContact
+
+    Lead:
+      type: object
+      properties:
+        id:
+          type: integer
+        loanAmount:
+          type: integer
+        loanPurpose:
+          type: string
+        creditScore:
+          type: string
+        annualIncome:
+          type: integer
+        employmentStatus:
+          type: string
+        firstName:
+          type: string
+        lastName:
+          type: string
+        email:
+          type: string
+        phone:
+          type: string
+        state:
+          type: string
+        consentToContact:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - loanAmount
+        - loanPurpose
+        - creditScore
+        - annualIncome
+        - employmentStatus
+        - firstName
+        - lastName
+        - email
+        - consentToContact
+        - createdAt
+
+    LeadStats:
+      type: object
+      properties:
+        totalLeads:
+          type: integer
+        todayLeads:
+          type: integer
+        avgLoanAmount:
+          type: number
+        topPurpose:
+          type: string
+      required:
+        - totalLeads
+        - todayLeads
+        - avgLoanAmount
+        - topPurpose
+
+    LenderOffer:
+      type: object
+      properties:
+        id:
+          type: integer
+        lenderName:
+          type: string
+        logoUrl:
+          type: string
+        minRate:
+          type: number
+          description: Minimum APR percentage
+        maxRate:
+          type: number
+          description: Maximum APR percentage
+        minAmount:
+          type: integer
+        maxAmount:
+          type: integer
+        minTerm:
+          type: integer
+          description: Minimum loan term in months
+        maxTerm:
+          type: integer
+          description: Maximum loan term in months
+        minCreditScore:
+          type: integer
+        estimatedMonthlyPayment:
+          type: number
+        features:
+          type: array
+          items:
+            type: string
+        affiliateUrl:
+          type: string
+        badgeLabel:
+          type: string
+          description: Optional badge like Best Rate or Most Popular
+      required:
+        - id
+        - lenderName
+        - minRate
+        - maxRate
+        - minAmount
+        - maxAmount
+        - minTerm
+        - maxTerm
+        - minCreditScore
+        - estimatedMonthlyPayment
+        - features
+        - affiliateUrl

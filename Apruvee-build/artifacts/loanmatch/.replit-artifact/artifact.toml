@@ -1,0 +1,31 @@
+kind = "web"
+previewPath = "/"
+title = "LoanMatch - Personal Loan Marketplace"
+version = "1.0.0"
+id = "artifacts/loanmatch"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 24687
+
+[services.development]
+run = "pnpm --filter @workspace/loanmatch run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/loanmatch", "run", "build" ]
+publicDir = "artifacts/loanmatch/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "24687"
+BASE_PATH = "/"

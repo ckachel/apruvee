@@ -1,0 +1,8 @@
+User-agent: *
+Allow: /
+
+# Don't index transactional pages or generated result pages
+Disallow: /apply
+Disallow: /results
+
+Sitemap: https://apruvee.com/sitemap.xml
