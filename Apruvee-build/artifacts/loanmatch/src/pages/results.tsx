@@ -1,7 +1,7 @@
 import { useLocation } from "wouter";
 import { PageWrapper } from "@/components/layout/page-wrapper";
 import { useListOffers, getListOffersQueryKey } from "@workspace/api-client-react";
-import { Shield, Check, Info, ArrowRight, Star, TrendingDown } from "lucide-react";
+import { Shield, Check, Info, ArrowRight, Star, TrendingDown, ChevronDown, ChevronUp } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { calculateTotalInterest, formatCurrency } from "@/lib/loan-math";
 import {
@@ -24,11 +24,10 @@ export default function Results() {
     { query: { enabled: true, queryKey: getListOffersQueryKey({ loanAmount, creditScore, loanPurpose }) } }
   );
 
-  // Savings calculator state — driven by the shared DebtConsolidationCalculator component
-  // via its onInputsChange callback, so the per-offer savings cards stay in sync.
   const [currentDebt, setCurrentDebt] = useState<number>(loanAmount ?? 15000);
   const [currentApr, setCurrentApr] = useState<number>(24);
-  // Re-use the same activation threshold the page has always used: $1,000 + APR > 0.
+  const [showCalculator, setShowCalculator] = useState(false);
+
   const calculatorActive = currentDebt >= 1000 && currentApr > 0;
 
   const handleCalculatorChange = useCallback(
@@ -39,17 +38,15 @@ export default function Results() {
     [],
   );
 
-  // Scroll to top on load
   useEffect(() => {
     window.scrollTo(0, 0);
   }, []);
 
   const sortedOffers = offers?.sort((a, b) => a.minRate - b.minRate) || [];
 
-  // Compute savings per offer
   const offerSavings = useMemo(() => {
     type OfferId = (typeof sortedOffers)[number]["id"];
-    if (!calculatorActive) return new Map<OfferId, number>();
+    if (!calculatorActive || !showCalculator) return new Map<OfferId, number>();
     const map = new Map<OfferId, number>();
     const currentInterest = calculateTotalInterest(currentDebt, currentApr, COMPARISON_TERM_MONTHS);
     for (const offer of sortedOffers) {
@@ -58,7 +55,7 @@ export default function Results() {
       map.set(offer.id, savings);
     }
     return map;
-  }, [calculatorActive, currentDebt, currentApr, sortedOffers]);
+  }, [calculatorActive, currentDebt, currentApr, sortedOffers, showCalculator]);
 
   const bestSavings = useMemo(() => {
     if (offerSavings.size === 0) return 0;
@@ -87,51 +84,61 @@ export default function Results() {
             {/* Main Content: Offers */}
             <div className="lg:col-span-2 space-y-6 relative z-10">
 
-              {/* Sample data notice */}
-              <div className="bg-blue-50 border border-blue-200 text-blue-900 p-4 rounded-xl flex items-start gap-3 text-sm">
-                <Info className="w-5 h-5 shrink-0 mt-0.5" />
-                <div>
-                  <p className="font-semibold mb-1">Sample offers shown for illustrative purposes.</p>
-                  <p>
-                    The offers below are representative examples of the loan rates and terms
-                    typically available for borrowers with your profile from leading personal loan
-                    providers. Final rates, terms, and approval are determined by each lender.
-                  </p>
-                </div>
+              {/* Collapsible Savings Calculator */}
+              <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                <button
+                  onClick={() => setShowCalculator(!showCalculator)}
+                  className="w-full flex items-center justify-between p-4 text-left hover:bg-slate-50 transition-colors"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-full bg-secondary text-primary flex items-center justify-center">
+                      <TrendingDown className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <p className="font-semibold text-slate-900 text-sm">See how much you could save</p>
+                      {!showCalculator && calculatorActive && bestSavings > 0 && (
+                        <p className="text-xs text-emerald-600 font-medium">Tap to calculate your savings</p>
+                      )}
+                    </div>
+                  </div>
+                  {showCalculator ? (
+                    <ChevronUp className="w-5 h-5 text-slate-400" />
+                  ) : (
+                    <ChevronDown className="w-5 h-5 text-slate-400" />
+                  )}
+                </button>
+
+                {showCalculator && (
+                  <div className="border-t border-slate-100 p-4">
+                    <DebtConsolidationCalculator
+                      variant="hero"
+                      compact
+                      title=""
+                      subtitle="Enter your current credit card debt and APR to see your potential savings on each offer."
+                      defaultDebt={loanAmount ?? 15000}
+                      defaultCurrentApr={24}
+                      onInputsChange={handleCalculatorChange}
+                      inactiveMessage="Enter at least $1,000 in debt and a current APR above 0%."
+                      customFooter={
+                        calculatorActive && bestSavings > 0 ? (
+                          <div className="pt-4 border-t border-white/20 flex items-center gap-3">
+                            <TrendingDown className="w-5 h-5 shrink-0" />
+                            <p className="text-sm">
+                              Based on a {COMPARISON_TERM_MONTHS}-month payoff, you could save up to{" "}
+                              <strong className="text-white font-bold text-base">
+                                {formatCurrency(bestSavings)}
+                              </strong>{" "}
+                              in interest with the offers below.
+                            </p>
+                          </div>
+                        ) : null
+                      }
+                    />
+                  </div>
+                )}
               </div>
 
-              {/* Savings Calculator (shared component, compact 2-input mode) */}
-              <DebtConsolidationCalculator
-                variant="hero"
-                compact
-                title="See how much you could save"
-                subtitle="Tell us about your current credit card debt and we'll calculate the lifetime interest savings for each offer below."
-                defaultDebt={loanAmount ?? 15000}
-                defaultCurrentApr={24}
-                onInputsChange={handleCalculatorChange}
-                inactiveMessage="Enter at least $1,000 in debt and a current APR above 0% to see your potential savings."
-                customFooter={
-                  calculatorActive && bestSavings > 0 ? (
-                    <div className="pt-5 border-t border-white/20 flex items-center gap-3">
-                      <TrendingDown className="w-5 h-5 shrink-0" />
-                      <p className="text-sm">
-                        Based on a {COMPARISON_TERM_MONTHS}-month payoff, you could save up to{" "}
-                        <strong className="text-white font-bold text-base">
-                          {formatCurrency(bestSavings)}
-                        </strong>{" "}
-                        in interest with the offers below.
-                      </p>
-                    </div>
-                  ) : !calculatorActive ? (
-                    <p className="text-xs text-primary-foreground/70">
-                      Enter at least $1,000 in debt and a current APR above 0% to see your potential
-                      savings.
-                    </p>
-                  ) : null
-                }
-              />
-
-              {/* Disclosure Alert */}
+              {/* APR Disclosure */}
               <div className="bg-blue-50 border border-blue-100 text-blue-800 p-4 rounded-xl flex items-start gap-3 text-sm">
                 <Info className="w-5 h-5 shrink-0 mt-0.5" />
                 <p>
@@ -171,7 +178,7 @@ export default function Results() {
                 <div className="space-y-6">
                   {sortedOffers.map((offer) => {
                     const savings = offerSavings.get(offer.id) ?? 0;
-                    const showSavings = calculatorActive && savings > 0;
+                    const showSavings = showCalculator && calculatorActive && savings > 0;
                     return (
                       <div key={offer.id} className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden hover:shadow-md transition-shadow relative">
                         {offer.badgeLabel && (
@@ -263,7 +270,7 @@ export default function Results() {
                 </div>
               )}
 
-              {calculatorActive && sortedOffers.length > 0 && (
+              {showCalculator && calculatorActive && sortedOffers.length > 0 && (
                 <p className="text-xs text-slate-500 leading-relaxed">
                   <strong>How we calculate this:</strong> Savings estimates compare the total
                   interest you'd pay on {formatCurrency(currentDebt)} of credit card debt at your
