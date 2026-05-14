@@ -20,6 +20,7 @@ import CreditScoreForConsolidationLoan from "./pages/blog/credit-score-for-conso
 import HowSoftCreditPullWorks from "./pages/blog/how-soft-credit-pull-works";
 import DebtConsolidationCalculatorArticle from "./pages/blog/debt-consolidation-calculator";
 import FAQ from "./pages/faq";
+import AdvertiserDisclosure from "./pages/advertiser-disclosure";
 
 const queryClient = new QueryClient();
 
@@ -41,6 +42,7 @@ function Router() {
       <Route path="/faq" component={FAQ} />
       <Route path="/privacy" component={Privacy} />
       <Route path="/terms" component={Terms} />
+      <Route path="/advertiser-disclosure" component={AdvertiserDisclosure} />
       <Route component={NotFound} />
     </Switch>
   );

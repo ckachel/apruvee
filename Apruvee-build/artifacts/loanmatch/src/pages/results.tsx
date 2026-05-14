@@ -84,6 +84,20 @@ export default function Results() {
             {/* Main Content: Offers */}
             <div className="lg:col-span-2 space-y-6 relative z-10">
 
+              {/* Advertiser Disclosure + Rates Notice */}
+              <div className="bg-white rounded-xl border border-slate-200 px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs text-slate-500">
+                <span>
+                  Rates shown are estimated ranges. Your actual rate is determined by the lender based on your full credit profile.
+                  Not available in all states.
+                </span>
+                <a
+                  href="/advertiser-disclosure"
+                  className="text-primary hover:underline font-medium whitespace-nowrap shrink-0"
+                >
+                  Advertiser Disclosure
+                </a>
+              </div>
+
               {/* Collapsible Savings Calculator */}
               <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
                 <button
@@ -200,7 +214,7 @@ export default function Results() {
                               )}
                               <div>
                                 <h3 className="text-xl font-bold text-slate-900">{offer.lenderName}</h3>
-                                <p className="text-sm text-slate-500">Partner Lender</p>
+                                <p className="text-sm text-slate-500">Paid Partner &nbsp;<span title="Apruvee may earn a referral fee if you apply with this lender." className="cursor-help text-slate-400 hover:text-slate-600">ⓘ</span></p>
                               </div>
                             </div>
                             <div className="text-left md:text-right">

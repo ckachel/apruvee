@@ -138,7 +138,7 @@ export default function Home() {
             <div>
               <h2 className="text-3xl md:text-4xl font-bold mb-6">Security & privacy you can count on.</h2>
               <p className="text-primary-foreground/80 text-lg mb-8 leading-relaxed">
-                We use bank-level 256-bit encryption to secure your data. We only partner with reputable lenders who meet our strict standards for transparency and fair practices.
+                We use bank-level 256-bit encryption to secure your data. We work with leading U.S. lending partners and present their offers transparently so you can make an informed decision.
               </p>
               
               <ul className="space-y-4">
@@ -171,7 +171,7 @@ export default function Home() {
                 </li>
                 <li className="flex items-start gap-3">
                   <CheckCircle className="w-5 h-5 text-secondary shrink-0 mt-0.5" />
-                  <span>Vetted U.S. lending partners only</span>
+                  <span>Leading U.S. lending partners</span>
                 </li>
                 <li className="flex items-start gap-3">
                   <CheckCircle className="w-5 h-5 text-secondary shrink-0 mt-0.5" />
