@@ -433,7 +433,21 @@ export default function HowSoftCreditPullWorks() {
                     The honest answer: it depends on the lender. Most start at 580–660, but the
                     rate you actually get depends on your tier.
                   </p>
-                </article>
+          
+        {/* CTA */}
+        <div className="max-w-3xl mx-auto px-4 pb-16">
+          <div className="bg-primary/5 border border-primary/20 rounded-2xl p-8 text-center">
+            <p className="text-lg font-bold text-slate-900 mb-2">Ready to see your personalized loan options?</p>
+            <p className="text-slate-600 text-sm mb-5">Soft credit pull only — no impact to your credit score.</p>
+            <a
+              href="/apply"
+              className="inline-flex items-center justify-center rounded-xl bg-primary px-8 py-3.5 text-base font-semibold text-white shadow hover:bg-primary/90 transition-all"
+            >
+              Check My Rate — It's Free
+            </a>
+          </div>
+        </div>
+      </article>
               </Link>
               <Link href="/blog/personal-loan-vs-balance-transfer">
                 <article className="bg-white rounded-2xl p-6 border border-slate-200 hover:border-primary hover:shadow-lg transition-all cursor-pointer group">

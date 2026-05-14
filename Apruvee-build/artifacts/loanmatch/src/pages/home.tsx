@@ -1,5 +1,5 @@
 import { Link } from "wouter";
-import { CheckCircle, Shield, Clock, TrendingDown } from "lucide-react";
+import { CheckCircle, Shield, Clock, TrendingDown, Phone, Lock, Star } from "lucide-react";
 import { PageWrapper } from "@/components/layout/page-wrapper";
 import heroImage from "@/assets/hero-relief.png";
 
@@ -56,6 +56,29 @@ export default function Home() {
                   <CheckCircle className="w-4 h-4 text-primary" />
                   Takes 2 minutes or less
                 </span>
+              </div>
+
+              {/* Trust badges */}
+              <div className="mt-8 flex flex-wrap items-center justify-center lg:justify-start gap-3">
+                <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white border border-slate-200 text-slate-700 text-xs font-semibold shadow-sm">
+                  <Lock className="w-3.5 h-3.5 text-primary" />
+                  Soft Pull Only
+                </div>
+                <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white border border-slate-200 text-slate-700 text-xs font-semibold shadow-sm">
+                  <Shield className="w-3.5 h-3.5 text-primary" />
+                  TCPA Compliant
+                </div>
+                <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white border border-slate-200 text-slate-700 text-xs font-semibold shadow-sm">
+                  <Star className="w-3.5 h-3.5 text-primary" />
+                  7+ Lenders
+                </div>
+              </div>
+
+              {/* Phone */}
+              <div className="mt-5 flex items-center justify-center lg:justify-start gap-2 text-sm text-slate-500">
+                <Phone className="w-4 h-4" />
+                <span>Questions? Call us: </span>
+                <a href="tel:+19195189294" className="text-primary font-semibold hover:underline">(919) 518-9294</a>
               </div>
             </div>
 
