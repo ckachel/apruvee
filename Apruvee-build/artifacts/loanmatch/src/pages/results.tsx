@@ -49,6 +49,8 @@ export default function Results() {
     window.scrollTo(0, 0);
   }, []);
 
+  const sortedOffers = offers?.sort((a, b) => a.minRate - b.minRate) || [];
+
   useEffect(() => {
     if (!isLoading && sortedOffers.length > 0 && !hasTrackedResults.current) {
       hasTrackedResults.current = true;
@@ -59,8 +61,6 @@ export default function Results() {
       });
     }
   }, [isLoading, sortedOffers.length, loanAmount, creditScore]);
-
-  const sortedOffers = offers?.sort((a, b) => a.minRate - b.minRate) || [];
 
   const offerSavings = useMemo(() => {
     type OfferId = (typeof sortedOffers)[number]["id"];
