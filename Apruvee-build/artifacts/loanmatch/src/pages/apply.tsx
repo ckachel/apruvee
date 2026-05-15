@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useLocation, Link } from "wouter";
 import { PageWrapper } from "@/components/layout/page-wrapper";
 import { Shield, ArrowLeft, Loader2 } from "lucide-react";
@@ -10,7 +10,6 @@ import {
   trackLeadConversion,
   STEP_NAMES,
 } from "@/lib/analytics";
-import { trackLeadConversion } from "@/lib/analytics";
 
 type FormData = {
   loanAmount: number | null;
