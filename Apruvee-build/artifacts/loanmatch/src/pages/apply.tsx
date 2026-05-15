@@ -3,6 +3,13 @@ import { useLocation, Link } from "wouter";
 import { PageWrapper } from "@/components/layout/page-wrapper";
 import { Shield, ArrowLeft, Loader2 } from "lucide-react";
 import { useSubmitLead } from "@workspace/api-client-react";
+import {
+  trackApplyStarted,
+  trackApplyStepComplete,
+  trackApplyAbandoned,
+  trackLeadConversion,
+  STEP_NAMES,
+} from "@/lib/analytics";
 import { trackLeadConversion } from "@/lib/analytics";
 
 type FormData = {
@@ -54,6 +61,11 @@ export default function Apply() {
   const [, setLocation] = useLocation();
   const submitLead = useSubmitLead();
   const [step, setStep] = useState(1);
+
+  // Track apply started on mount
+  useEffect(() => {
+    trackApplyStarted({ source: document.referrer?.includes("google") ? "google_ads" : "organic" });
+  }, []);
   const [data, setData] = useState<FormData>({
     loanAmount: null,
     loanPurpose: "",
@@ -72,7 +84,16 @@ export default function Apply() {
     setData((prev) => ({ ...prev, ...fields }));
   };
 
-  const nextStep = () => setStep((s) => Math.min(s + 1, 7));
+  const nextStep = () => {
+    trackApplyStepComplete({
+      step,
+      stepName: STEP_NAMES[step] ?? `step_${step}`,
+      loanAmount: data.loanAmount,
+      loanPurpose: data.loanPurpose,
+      creditScore: data.creditScore,
+    });
+    setStep((s) => Math.min(s + 1, 7));
+  };
   const prevStep = () => setStep((s) => Math.max(s - 1, 1));
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -97,6 +118,12 @@ export default function Apply() {
       },
       {
         onSuccess: () => {
+          trackLeadConversion({
+            loanAmount: data.loanAmount,
+            loanPurpose: data.loanPurpose,
+            creditScore: data.creditScore,
+            state: data.state ?? "",
+          });
           trackLeadConversion({
             loanAmount: data.loanAmount || 10000,
             loanPurpose: data.loanPurpose,
@@ -367,58 +394,18 @@ export default function Apply() {
                           onChange={(e) => updateData({ state: e.target.value })}
                           className="w-full px-4 py-3 rounded-lg border-2 border-slate-200 focus:border-primary outline-none transition-colors bg-white"
                         >
-                         <option value="">Select your state...</option>
-                          <option value="AL">Alabama</option>
-                          <option value="AK">Alaska</option>
-                          <option value="AZ">Arizona</option>
-                          <option value="AR">Arkansas</option>
+                          <option value="">Select...</option>
                           <option value="CA">California</option>
-                          <option value="CO">Colorado</option>
-                          <option value="CT">Connecticut</option>
-                          <option value="DE">Delaware</option>
-                          <option value="DC">Washington, D.C.</option>
-                          <option value="FL">Florida</option>
-                          <option value="GA">Georgia</option>
-                          <option value="HI">Hawaii</option>
-                          <option value="ID">Idaho</option>
-                          <option value="IL">Illinois</option>
-                          <option value="IN">Indiana</option>
-                          <option value="IA">Iowa</option>
-                          <option value="KS">Kansas</option>
-                          <option value="KY">Kentucky</option>
-                          <option value="LA">Louisiana</option>
-                          <option value="ME">Maine</option>
-                          <option value="MD">Maryland</option>
-                          <option value="MA">Massachusetts</option>
-                          <option value="MI">Michigan</option>
-                          <option value="MN">Minnesota</option>
-                          <option value="MS">Mississippi</option>
-                          <option value="MO">Missouri</option>
-                          <option value="MT">Montana</option>
-                          <option value="NE">Nebraska</option>
-                          <option value="NV">Nevada</option>
-                          <option value="NH">New Hampshire</option>
-                          <option value="NJ">New Jersey</option>
-                          <option value="NM">New Mexico</option>
-                          <option value="NY">New York</option>
-                          <option value="NC">North Carolina</option>
-                          <option value="ND">North Dakota</option>
-                          <option value="OH">Ohio</option>
-                          <option value="OK">Oklahoma</option>
-                          <option value="OR">Oregon</option>
-                          <option value="PA">Pennsylvania</option>
-                          <option value="RI">Rhode Island</option>
-                          <option value="SC">South Carolina</option>
-                          <option value="SD">South Dakota</option>
-                          <option value="TN">Tennessee</option>
                           <option value="TX">Texas</option>
-                          <option value="UT">Utah</option>
-                          <option value="VT">Vermont</option>
-                          <option value="VA">Virginia</option>
-                          <option value="WA">Washington</option>
-                          <option value="WV">West Virginia</option>
-                          <option value="WI">Wisconsin</option>
-                          <option value="WY">Wyoming</option>
+                          <option value="NY">New York</option>
+                          <option value="FL">Florida</option>
+                          <option value="IL">Illinois</option>
+                          <option value="PA">Pennsylvania</option>
+                          <option value="OH">Ohio</option>
+                          <option value="GA">Georgia</option>
+                          <option value="NC">North Carolina</option>
+                          <option value="MI">Michigan</option>
+                          <option value="OTHER">Other State</option>
                         </select>
                       </div>
                     </div>

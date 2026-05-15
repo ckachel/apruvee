@@ -2,7 +2,13 @@ import { useLocation } from "wouter";
 import { PageWrapper } from "@/components/layout/page-wrapper";
 import { useListOffers, getListOffersQueryKey } from "@workspace/api-client-react";
 import { Shield, Check, Info, ArrowRight, Star, TrendingDown, ChevronDown, ChevronUp } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, useRef } from "react";
+import {
+  trackResultsViewed,
+  trackLenderClicked,
+  trackCalculatorOpened,
+  trackCalculatorUsed,
+} from "@/lib/analytics";
 import { calculateTotalInterest, formatCurrency } from "@/lib/loan-math";
 import {
   DebtConsolidationCalculator,
@@ -25,6 +31,7 @@ export default function Results() {
   );
 
   const [currentDebt, setCurrentDebt] = useState<number>(loanAmount ?? 15000);
+  const hasTrackedResults = useRef(false);
   const [currentApr, setCurrentApr] = useState<number>(24);
   const [showCalculator, setShowCalculator] = useState(false);
 
@@ -41,6 +48,17 @@ export default function Results() {
   useEffect(() => {
     window.scrollTo(0, 0);
   }, []);
+
+  useEffect(() => {
+    if (!isLoading && sortedOffers.length > 0 && !hasTrackedResults.current) {
+      hasTrackedResults.current = true;
+      trackResultsViewed({
+        offerCount: sortedOffers.length,
+        loanAmount,
+        creditScore,
+      });
+    }
+  }, [isLoading, sortedOffers.length, loanAmount, creditScore]);
 
   const sortedOffers = offers?.sort((a, b) => a.minRate - b.minRate) || [];
 
@@ -271,6 +289,13 @@ export default function Results() {
                               href={offer.affiliateUrl}
                               target="_blank"
                               rel="noopener noreferrer"
+                              onClick={() => trackLenderClicked({
+                                lenderName: offer.lenderName,
+                                lenderRank: sortedOffers.indexOf(offer) + 1,
+                                minRate: offer.minRate,
+                                estimatedPayment: offer.estimatedMonthlyPayment,
+                                loanAmount,
+                              })}
                               className="w-full md:w-auto inline-flex items-center justify-center gap-2 rounded-xl bg-primary px-8 py-3.5 text-base font-semibold text-white shadow hover:bg-primary/90 transition-all focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 shrink-0"
                             >
                               Continue Application
