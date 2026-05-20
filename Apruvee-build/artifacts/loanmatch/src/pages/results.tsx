@@ -30,6 +30,9 @@ export default function Results() {
     { query: { enabled: true, queryKey: getListOffersQueryKey({ loanAmount, creditScore, loanPurpose }) } }
   );
 
+  // UUID click-ID for Round Sky — generated once on mount, stored in React state (no localStorage)
+  const [roundSkyClickId] = useState<string>(() => crypto.randomUUID());
+
   const [currentDebt, setCurrentDebt] = useState<number>(loanAmount ?? 15000);
   const hasTrackedResults = useRef(false);
   const [currentApr, setCurrentApr] = useState<number>(24);
@@ -80,6 +83,9 @@ export default function Results() {
     return Math.max(...Array.from(offerSavings.values()));
   }, [offerSavings]);
 
+  // Round Sky tracking URL — UUID click ID injected as subId3, no PII
+  const roundSkyUrl = `https://www.honestloans.net?id=9DPmXSrZouYKwbWnCnMko97mmKV4f5_t54mDiATa7YY.&subId3=${roundSkyClickId}`;
+
   return (
     <PageWrapper>
       <div className="bg-slate-50 min-h-screen pb-20">
@@ -119,7 +125,11 @@ export default function Results() {
               {/* Collapsible Savings Calculator */}
               <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
                 <button
-                  onClick={() => setShowCalculator(!showCalculator)}
+                  onClick={() => {
+                    const next = !showCalculator;
+                    setShowCalculator(next);
+                    if (next) trackCalculatorOpened({ loanAmount });
+                  }}
                   className="w-full flex items-center justify-between p-4 text-left hover:bg-slate-50 transition-colors"
                 >
                   <div className="flex items-center gap-3">
@@ -141,40 +151,23 @@ export default function Results() {
                 </button>
 
                 {showCalculator && (
-                  <div className="border-t border-slate-100 p-4">
+                  <div className="px-4 pb-4 border-t border-slate-100">
                     <DebtConsolidationCalculator
-                      variant="hero"
-                      compact
-                      title=""
-                      subtitle="Enter your current credit card debt and APR to see your potential savings on each offer."
-                      defaultDebt={loanAmount ?? 15000}
-                      defaultCurrentApr={24}
-                      onInputsChange={handleCalculatorChange}
-                      inactiveMessage="Enter at least $1,000 in debt and a current APR above 0%."
-                      customFooter={
-                        calculatorActive && bestSavings > 0 ? (
-                          <div className="pt-4 border-t border-white/20 flex items-center gap-3">
-                            <TrendingDown className="w-5 h-5 shrink-0" />
-                            <p className="text-sm">
-                              Based on a {COMPARISON_TERM_MONTHS}-month payoff, you could save up to{" "}
-                              <strong className="text-white font-bold text-base">
-                                {formatCurrency(bestSavings)}
-                              </strong>{" "}
-                              in interest with the offers below.
-                            </p>
-                          </div>
-                        ) : null
-                      }
+                      initialDebt={currentDebt}
+                      initialApr={currentApr}
+                      onChange={(values) => {
+                        handleCalculatorChange(values);
+                        trackCalculatorUsed({ debt: values.debt, currentApr: values.currentApr, loanAmount });
+                      }}
                     />
                   </div>
                 )}
               </div>
 
-              {/* APR Disclosure */}
-              <div className="bg-blue-50 border border-blue-100 text-blue-800 p-4 rounded-xl flex items-start gap-3 text-sm">
-                <Info className="w-5 h-5 shrink-0 mt-0.5" />
+              {/* Sort explainer */}
+              <div className="bg-white rounded-xl border border-slate-200 px-4 py-3 text-xs text-slate-500">
                 <p>
-                  <strong>APR Disclosure:</strong> The Annual Percentage Rate (APR) represents the true yearly cost of your loan, including interest and fees. Sorting by lowest minimum APR helps you find the most cost-effective options based on your profile.
+                  Sorting by lowest minimum APR helps you find the most cost-effective options based on your profile.
                 </p>
               </div>
 
@@ -208,6 +201,7 @@ export default function Results() {
                 </div>
               ) : (
                 <div className="space-y-6">
+                  {/* Seeded lender cards */}
                   {sortedOffers.map((offer) => {
                     const savings = offerSavings.get(offer.id) ?? 0;
                     const showSavings = showCalculator && calculatorActive && savings > 0;
@@ -236,47 +230,35 @@ export default function Results() {
                               </div>
                             </div>
                             <div className="text-left md:text-right">
-                              <p className="text-sm text-slate-500 mb-1">Est. Payment</p>
-                              <p className="text-3xl font-extrabold text-slate-900">${offer.estimatedMonthlyPayment}<span className="text-lg text-slate-500 font-normal">/mo</span></p>
+                              <p className="text-sm text-slate-500 mb-1">Est. Monthly Payment</p>
+                              <p className="text-2xl font-bold text-slate-900">{formatCurrency(offer.estimatedMonthlyPayment)}</p>
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-3 gap-4 mb-6 p-4 bg-slate-50 rounded-xl">
+                            <div>
+                              <p className="text-xs text-slate-500 mb-1">APR Range</p>
+                              <p className="font-semibold text-slate-900">{offer.minRate}% – {offer.maxRate}%</p>
+                            </div>
+                            <div>
+                              <p className="text-xs text-slate-500 mb-1">Loan Amount</p>
+                              <p className="font-semibold text-slate-900">{formatCurrency(offer.minAmount)} – {formatCurrency(offer.maxAmount)}</p>
+                            </div>
+                            <div>
+                              <p className="text-xs text-slate-500 mb-1">Loan Term</p>
+                              <p className="font-semibold text-slate-900">{offer.minTerm} – {offer.maxTerm} mo</p>
                             </div>
                           </div>
 
                           {showSavings && (
-                            <div className="mb-6 bg-emerald-50 border border-emerald-200 rounded-xl p-4 flex items-start gap-3">
-                              <div className="w-9 h-9 rounded-full bg-emerald-100 flex items-center justify-center shrink-0">
-                                <TrendingDown className="w-5 h-5 text-emerald-700" />
-                              </div>
-                              <div>
-                                <p className="text-emerald-900 font-bold text-lg leading-tight">
-                                  Save {formatCurrency(savings)} in interest
-                                </p>
-                                <p className="text-emerald-800/80 text-xs mt-0.5">
-                                  vs. paying off {formatCurrency(currentDebt)} at {currentApr}% APR over {COMPARISON_TERM_MONTHS} months
-                                </p>
-                              </div>
+                            <div className="mb-4 px-4 py-3 bg-emerald-50 rounded-xl border border-emerald-100">
+                              <p className="text-sm text-emerald-700 font-medium">
+                                Estimated savings vs. current cards: <strong>{formatCurrency(savings)}</strong> over {COMPARISON_TERM_MONTHS} months
+                              </p>
                             </div>
                           )}
 
-                          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8 bg-slate-50 rounded-xl p-4">
-                            <div>
-                              <p className="text-xs text-slate-500 font-medium mb-1">Est. APR</p>
-                              <p className="font-bold text-slate-900">{offer.minRate}% - {offer.maxRate}%</p>
-                            </div>
-                            <div>
-                              <p className="text-xs text-slate-500 font-medium mb-1">Loan Amount</p>
-                              <p className="font-bold text-slate-900">${offer.minAmount.toLocaleString()} - ${(offer.maxAmount / 1000).toFixed(0)}k</p>
-                            </div>
-                            <div>
-                              <p className="text-xs text-slate-500 font-medium mb-1">Terms</p>
-                              <p className="font-bold text-slate-900">{offer.minTerm} - {offer.maxTerm} mo</p>
-                            </div>
-                            <div>
-                              <p className="text-xs text-slate-500 font-medium mb-1">Min Score</p>
-                              <p className="font-bold text-slate-900">{offer.minCreditScore}+</p>
-                            </div>
-                          </div>
-
-                          <div className="flex flex-col md:flex-row items-center justify-between gap-4">
+                          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                             <ul className="space-y-1 w-full md:w-auto">
                               {offer.features.slice(0, 2).map((feature, i) => (
                                 <li key={i} className="flex items-center gap-2 text-sm text-slate-600">
@@ -306,6 +288,71 @@ export default function Results() {
                       </div>
                     );
                   })}
+
+                  {/* Round Sky — affiliate card with UUID click tracking */}
+                  <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden hover:shadow-md transition-shadow relative">
+                    <div className="p-6 md:p-8">
+                      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-6">
+                        <div className="flex items-center gap-4">
+                          <div className="w-16 h-16 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 font-bold text-xl">
+                            RS
+                          </div>
+                          <div>
+                            <h3 className="text-xl font-bold text-slate-900">Round Sky</h3>
+                            <p className="text-sm text-slate-500">Paid Partner &nbsp;<span title="Apruvee may earn a referral fee if you apply with this lender." className="cursor-help text-slate-400 hover:text-slate-600">ⓘ</span></p>
+                          </div>
+                        </div>
+                        <div className="text-left md:text-right">
+                          <p className="text-sm text-slate-500 mb-1">Est. Monthly Payment</p>
+                          <p className="text-2xl font-bold text-slate-900">Varies</p>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-3 gap-4 mb-6 p-4 bg-slate-50 rounded-xl">
+                        <div>
+                          <p className="text-xs text-slate-500 mb-1">APR Range</p>
+                          <p className="font-semibold text-slate-900">Varies by lender</p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-slate-500 mb-1">Loan Amount</p>
+                          <p className="font-semibold text-slate-900">Up to $35,000</p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-slate-500 mb-1">Decision</p>
+                          <p className="font-semibold text-slate-900">As fast as today</p>
+                        </div>
+                      </div>
+
+                      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                        <ul className="space-y-1 w-full md:w-auto">
+                          <li className="flex items-center gap-2 text-sm text-slate-600">
+                            <Check className="w-4 h-4 text-green-500" />
+                            Multiple lender network
+                          </li>
+                          <li className="flex items-center gap-2 text-sm text-slate-600">
+                            <Check className="w-4 h-4 text-green-500" />
+                            Quick online process
+                          </li>
+                        </ul>
+                        <a
+                          href={roundSkyUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={() => trackLenderClicked({
+                            lenderName: "Round Sky",
+                            lenderRank: sortedOffers.length + 1,
+                            minRate: 0,
+                            estimatedPayment: 0,
+                            loanAmount,
+                          })}
+                          className="w-full md:w-auto inline-flex items-center justify-center gap-2 rounded-xl bg-primary px-8 py-3.5 text-base font-semibold text-white shadow hover:bg-primary/90 transition-all focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 shrink-0"
+                        >
+                          Continue Application
+                          <ArrowRight className="w-4 h-4" />
+                        </a>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               )}
 
