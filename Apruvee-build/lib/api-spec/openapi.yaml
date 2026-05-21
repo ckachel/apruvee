@@ -87,7 +87,7 @@ paths:
             type: string
       responses:
         "200":
-          description: List of lender offers
+          description: List of lender offers sorted paid partners first, then by min rate
           content:
             application/json:
               schema:
@@ -185,7 +185,6 @@ components:
           type: boolean
         createdAt:
           type: string
-          format: date-time
       required:
         - id
         - loanAmount
@@ -254,6 +253,9 @@ components:
         badgeLabel:
           type: string
           description: Optional badge like Best Rate or Most Popular
+        isPaidPartner:
+          type: boolean
+          description: Whether this lender has an active affiliate agreement with tracked URL. Paid partners are always sorted first.
       required:
         - id
         - lenderName
@@ -267,3 +269,4 @@ components:
         - estimatedMonthlyPayment
         - features
         - affiliateUrl
+        - isPaidPartner

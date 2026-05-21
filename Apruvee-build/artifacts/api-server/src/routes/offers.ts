@@ -1,7 +1,6 @@
 import { Router, type IRouter } from "express";
 import { db, lenderOffersTable } from "@workspace/db";
 import { ListOffersQueryParams, ListOffersResponse } from "@workspace/api-zod";
-import { gte, asc } from "drizzle-orm";
 
 const router: IRouter = Router();
 
@@ -13,32 +12,34 @@ router.get("/offers", async (req, res): Promise<void> => {
     return;
   }
 
-  let query = db
-    .select()
-    .from(lenderOffersTable)
-    .orderBy(asc(lenderOffersTable.minRate));
-
   const { creditScore } = params.data;
 
+  // Map credit score label to numeric floor for filtering
   let minScore = 0;
-  if (creditScore === "Excellent 720+") minScore = 720;
-  else if (creditScore === "Good 680-719" || creditScore === "Good 680–719") minScore = 680;
-  else if (creditScore === "Fair 640-679" || creditScore === "Fair 640–679") minScore = 640;
-  else if (creditScore === "Poor below 640") minScore = 580;
+  if (creditScore === "Excellent 720+" || creditScore === "Excellent") minScore = 720;
+  else if (creditScore === "Good 680-719" || creditScore === "Good 680–719" || creditScore === "Good") minScore = 680;
+  else if (creditScore === "Fair 640-679" || creditScore === "Fair 640–679" || creditScore === "Fair") minScore = 640;
+  else if (creditScore === "Poor below 640" || creditScore === "Poor") minScore = 580;
 
-  const offers = await (minScore > 0
-    ? db
-        .select()
-        .from(lenderOffersTable)
-        .where(gte(lenderOffersTable.minCreditScore, 0))
-        .orderBy(asc(lenderOffersTable.minRate))
-    : query);
+  // Fetch all offers — sorting is done in-process so we can apply the
+  // paid-partner priority tier without a SQL CASE expression.
+  const all = await db.select().from(lenderOffersTable);
 
+  // Filter to lenders whose min credit score requirement ≤ user's score.
+  // When no credit score is provided, return all offers.
   const filtered = minScore > 0
-    ? offers.filter(o => o.minCreditScore <= minScore)
-    : offers;
+    ? all.filter((o) => o.minCreditScore <= minScore)
+    : all;
 
-  const cleaned = filtered.map(o => ({
+  // Sort: paid partners first (isPaidPartner DESC), then by minRate ASC within each tier.
+  const sorted = filtered.sort((a, b) => {
+    if (a.isPaidPartner !== b.isPaidPartner) {
+      return a.isPaidPartner ? -1 : 1; // paid partners bubble to top
+    }
+    return a.minRate - b.minRate;
+  });
+
+  const cleaned = sorted.map((o) => ({
     ...o,
     logoUrl: o.logoUrl ?? undefined,
     badgeLabel: o.badgeLabel ?? undefined,

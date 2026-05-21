@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, real } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, real, boolean } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
@@ -17,6 +17,9 @@ export const lenderOffersTable = pgTable("lender_offers", {
   features: text("features").array().notNull().default([]),
   affiliateUrl: text("affiliate_url").notNull(),
   badgeLabel: text("badge_label"),
+  // Paid partners have active affiliate agreements with tracked URLs.
+  // They are always sorted to the top of the results page.
+  isPaidPartner: boolean("is_paid_partner").notNull().default(false),
 });
 
 export const insertLenderOfferSchema = createInsertSchema(lenderOffersTable).omit({ id: true });

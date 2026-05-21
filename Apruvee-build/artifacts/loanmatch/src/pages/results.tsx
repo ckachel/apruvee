@@ -14,8 +14,21 @@ import {
   DebtConsolidationCalculator,
   type DebtConsolidationCalculatorValues,
 } from "@/components/debt-consolidation-calculator";
+import type { LenderOffer } from "@workspace/api-client-react";
 
 const COMPARISON_TERM_MONTHS = 60;
+
+// Round Sky's affiliate base URL — subId3 is injected at render time with a
+// per-session UUID so each click is individually trackable without storing PII.
+const ROUND_SKY_BASE_URL =
+  "https://www.honestloans.net?id=9DPmXSrZouYKwbWnCnMko97mmKV4f5_t54mDiATa7YY.";
+
+function buildAffiliateUrl(offer: LenderOffer, clickId: string): string {
+  if (offer.lenderName === "Round Sky") {
+    return `${ROUND_SKY_BASE_URL}&subId3=${clickId}`;
+  }
+  return offer.affiliateUrl;
+}
 
 export default function Results() {
   const [location] = useLocation();
@@ -30,8 +43,8 @@ export default function Results() {
     { query: { enabled: true, queryKey: getListOffersQueryKey({ loanAmount, creditScore, loanPurpose }) } }
   );
 
-  // UUID click-ID for Round Sky — generated once on mount, stored in React state (no localStorage)
-  const [roundSkyClickId] = useState<string>(() => crypto.randomUUID());
+  // One UUID per page-load — used as the click ID for all paid-partner links.
+  const [sessionClickId] = useState<string>(() => crypto.randomUUID());
 
   const [currentDebt, setCurrentDebt] = useState<number>(loanAmount ?? 15000);
   const hasTrackedResults = useRef(false);
@@ -52,7 +65,16 @@ export default function Results() {
     window.scrollTo(0, 0);
   }, []);
 
-  const sortedOffers = offers?.sort((a, b) => a.minRate - b.minRate) || [];
+  // The API already returns offers sorted: paid partners first, then by minRate.
+  // We preserve that order and only re-sort within the savings calculator context.
+  const sortedOffers: LenderOffer[] = useMemo(() => {
+    if (!offers) return [];
+    // Maintain server sort (paid first, then minRate) — do not re-sort by minRate alone.
+    return [...offers].sort((a, b) => {
+      if (a.isPaidPartner !== b.isPaidPartner) return a.isPaidPartner ? -1 : 1;
+      return a.minRate - b.minRate;
+    });
+  }, [offers]);
 
   useEffect(() => {
     if (!isLoading && sortedOffers.length > 0 && !hasTrackedResults.current) {
@@ -66,7 +88,7 @@ export default function Results() {
   }, [isLoading, sortedOffers.length, loanAmount, creditScore]);
 
   const offerSavings = useMemo(() => {
-    type OfferId = (typeof sortedOffers)[number]["id"];
+    type OfferId = LenderOffer["id"];
     if (!calculatorActive || !showCalculator) return new Map<OfferId, number>();
     const map = new Map<OfferId, number>();
     const currentInterest = calculateTotalInterest(currentDebt, currentApr, COMPARISON_TERM_MONTHS);
@@ -82,9 +104,6 @@ export default function Results() {
     if (offerSavings.size === 0) return 0;
     return Math.max(...Array.from(offerSavings.values()));
   }, [offerSavings]);
-
-  // Round Sky tracking URL — UUID click ID injected as subId3, no PII
-  const roundSkyUrl = `https://www.honestloans.net?id=9DPmXSrZouYKwbWnCnMko97mmKV4f5_t54mDiATa7YY.&subId3=${roundSkyClickId}`;
 
   return (
     <PageWrapper>
@@ -167,7 +186,10 @@ export default function Results() {
               {/* Sort explainer */}
               <div className="bg-white rounded-xl border border-slate-200 px-4 py-3 text-xs text-slate-500">
                 <p>
-                  Sorting by lowest minimum APR helps you find the most cost-effective options based on your profile.
+                  Sponsored partners appear first. Remaining offers are sorted by lowest minimum APR.{" "}
+                  <a href="/advertiser-disclosure" className="text-primary hover:underline">
+                    How we're compensated
+                  </a>
                 </p>
               </div>
 
@@ -194,201 +216,183 @@ export default function Results() {
                     <Info className="w-8 h-8 text-slate-400" />
                   </div>
                   <h2 className="text-xl font-bold text-slate-900 mb-2">No offers currently available</h2>
-                  <p className="text-slate-600 mb-6">Based on the information provided, we couldn't match you with a lender at this moment. You can try adjusting your requested loan amount.</p>
-                  <button onClick={() => window.history.back()} className="text-primary font-semibold hover:underline">
-                    Go back and edit info
-                  </button>
+                  <p className="text-slate-600 mb-6">
+                    Based on the information provided, we couldn't match you with a lender at this moment.
+                  </p>
                 </div>
               ) : (
-                <div className="space-y-6">
-                  {/* Seeded lender cards */}
-                  {sortedOffers.map((offer) => {
-                    const savings = offerSavings.get(offer.id) ?? 0;
-                    const showSavings = showCalculator && calculatorActive && savings > 0;
+                <div className="space-y-4">
+                  {sortedOffers.map((offer, index) => {
+                    const savings = offerSavings.get(offer.id);
+                    const hasBestSavings = savings !== undefined && savings === bestSavings && bestSavings > 0;
+                    const affiliateUrl = buildAffiliateUrl(offer, sessionClickId);
+
                     return (
-                      <div key={offer.id} className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden hover:shadow-md transition-shadow relative">
-                        {offer.badgeLabel && (
-                          <div className="absolute top-0 right-0 bg-secondary text-primary text-xs font-bold px-3 py-1 rounded-bl-lg flex items-center gap-1">
-                            <Star className="w-3 h-3" />
-                            {offer.badgeLabel}
+                      <div
+                        key={offer.id}
+                        className={`bg-white rounded-2xl border shadow-sm overflow-hidden transition-shadow hover:shadow-md ${
+                          offer.isPaidPartner
+                            ? "border-primary/30 ring-1 ring-primary/10"
+                            : "border-slate-200"
+                        }`}
+                      >
+                        {/* Paid partner badge */}
+                        {offer.isPaidPartner && (
+                          <div className="bg-primary/5 border-b border-primary/10 px-6 py-1.5 flex items-center gap-1.5">
+                            <Star className="w-3 h-3 text-primary fill-primary" />
+                            <span className="text-xs font-semibold text-primary tracking-wide uppercase">
+                              Sponsored
+                            </span>
                           </div>
                         )}
 
-                        <div className="p-6 md:p-8">
-                          <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-6">
+                        <div className="p-6">
+                          {/* Header row */}
+                          <div className="flex items-start justify-between mb-6">
                             <div className="flex items-center gap-4">
-                              {offer.logoUrl ? (
-                                <img src={offer.logoUrl} alt={offer.lenderName} className="w-16 h-16 object-contain" />
-                              ) : (
-                                <div className="w-16 h-16 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 font-bold text-xl">
-                                  {offer.lenderName.substring(0, 2).toUpperCase()}
-                                </div>
-                              )}
+                              {/* Lender logo / initials */}
+                              <div className="w-14 h-14 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-lg shrink-0">
+                                {offer.lenderName.charAt(0)}
+                              </div>
                               <div>
-                                <h3 className="text-xl font-bold text-slate-900">{offer.lenderName}</h3>
-                                <p className="text-sm text-slate-500">Paid Partner &nbsp;<span title="Apruvee may earn a referral fee if you apply with this lender." className="cursor-help text-slate-400 hover:text-slate-600">ⓘ</span></p>
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <h3 className="text-xl font-bold text-slate-900">{offer.lenderName}</h3>
+                                  {offer.badgeLabel && !offer.isPaidPartner && (
+                                    <span className="text-xs font-semibold bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded-full border border-emerald-200">
+                                      {offer.badgeLabel}
+                                    </span>
+                                  )}
+                                </div>
+                                {hasBestSavings && savings !== undefined && (
+                                  <p className="text-sm text-emerald-600 font-semibold mt-0.5">
+                                    Save up to {formatCurrency(savings)} in interest
+                                  </p>
+                                )}
                               </div>
                             </div>
-                            <div className="text-left md:text-right">
+                            <div className="text-right shrink-0 ml-4">
                               <p className="text-sm text-slate-500 mb-1">Est. Monthly Payment</p>
-                              <p className="text-2xl font-bold text-slate-900">{formatCurrency(offer.estimatedMonthlyPayment)}</p>
+                              <p className="text-2xl font-bold text-slate-900">
+                                {formatCurrency(offer.estimatedMonthlyPayment)}
+                              </p>
                             </div>
                           </div>
 
+                          {/* Stats grid */}
                           <div className="grid grid-cols-3 gap-4 mb-6 p-4 bg-slate-50 rounded-xl">
                             <div>
                               <p className="text-xs text-slate-500 mb-1">APR Range</p>
-                              <p className="font-semibold text-slate-900">{offer.minRate}% – {offer.maxRate}%</p>
+                              <p className="font-semibold text-slate-900">
+                                {offer.minRate.toFixed(2)}% – {offer.maxRate.toFixed(2)}%
+                              </p>
                             </div>
                             <div>
                               <p className="text-xs text-slate-500 mb-1">Loan Amount</p>
-                              <p className="font-semibold text-slate-900">{formatCurrency(offer.minAmount)} – {formatCurrency(offer.maxAmount)}</p>
+                              <p className="font-semibold text-slate-900">
+                                {formatCurrency(offer.minAmount)} – {formatCurrency(offer.maxAmount)}
+                              </p>
                             </div>
                             <div>
-                              <p className="text-xs text-slate-500 mb-1">Loan Term</p>
-                              <p className="font-semibold text-slate-900">{offer.minTerm} – {offer.maxTerm} mo</p>
+                              <p className="text-xs text-slate-500 mb-1">Term</p>
+                              <p className="font-semibold text-slate-900">
+                                {offer.minTerm}–{offer.maxTerm} mo
+                              </p>
                             </div>
                           </div>
 
-                          {showSavings && (
-                            <div className="mb-4 px-4 py-3 bg-emerald-50 rounded-xl border border-emerald-100">
-                              <p className="text-sm text-emerald-700 font-medium">
-                                Estimated savings vs. current cards: <strong>{formatCurrency(savings)}</strong> over {COMPARISON_TERM_MONTHS} months
-                              </p>
-                            </div>
-                          )}
-
+                          {/* Features + CTA */}
                           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                             <ul className="space-y-1 w-full md:w-auto">
-                              {offer.features.slice(0, 2).map((feature, i) => (
-                                <li key={i} className="flex items-center gap-2 text-sm text-slate-600">
-                                  <Check className="w-4 h-4 text-green-500" />
+                              {offer.features.slice(0, 3).map((feature) => (
+                                <li key={feature} className="flex items-center gap-2 text-sm text-slate-600">
+                                  <Check className="w-4 h-4 text-green-500 shrink-0" />
                                   {feature}
                                 </li>
                               ))}
                             </ul>
                             <a
-                              href={offer.affiliateUrl}
+                              href={affiliateUrl}
                               target="_blank"
                               rel="noopener noreferrer"
-                              onClick={() => trackLenderClicked({
-                                lenderName: offer.lenderName,
-                                lenderRank: sortedOffers.indexOf(offer) + 1,
-                                minRate: offer.minRate,
-                                estimatedPayment: offer.estimatedMonthlyPayment,
-                                loanAmount,
-                              })}
-                              className="w-full md:w-auto inline-flex items-center justify-center gap-2 rounded-xl bg-primary px-8 py-3.5 text-base font-semibold text-white shadow hover:bg-primary/90 transition-all focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 shrink-0"
+                              onClick={() =>
+                                trackLenderClicked({
+                                  lenderName: offer.lenderName,
+                                  lenderRank: index + 1,
+                                  minRate: offer.minRate,
+                                  estimatedPayment: offer.estimatedMonthlyPayment,
+                                  loanAmount,
+                                })
+                              }
+                              className={`inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl font-semibold text-sm transition-all whitespace-nowrap shrink-0 ${
+                                offer.isPaidPartner
+                                  ? "bg-primary text-white hover:bg-primary/90 shadow-sm"
+                                  : "bg-slate-900 text-white hover:bg-slate-700"
+                              }`}
                             >
-                              Continue Application
+                              Check My Rate
                               <ArrowRight className="w-4 h-4" />
                             </a>
                           </div>
+
+                          {/* Disclosure for non-paid lenders */}
+                          {!offer.isPaidPartner && (
+                            <p className="text-xs text-slate-400 mt-4">
+                              Apruvee does not currently have an affiliate agreement with {offer.lenderName}. This listing is for informational purposes only.
+                            </p>
+                          )}
                         </div>
                       </div>
                     );
                   })}
-
-                  {/* Round Sky — affiliate card with UUID click tracking */}
-                  <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden hover:shadow-md transition-shadow relative">
-                    <div className="p-6 md:p-8">
-                      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-6">
-                        <div className="flex items-center gap-4">
-                          <div className="w-16 h-16 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 font-bold text-xl">
-                            RS
-                          </div>
-                          <div>
-                            <h3 className="text-xl font-bold text-slate-900">Round Sky</h3>
-                            <p className="text-sm text-slate-500">Paid Partner &nbsp;<span title="Apruvee may earn a referral fee if you apply with this lender." className="cursor-help text-slate-400 hover:text-slate-600">ⓘ</span></p>
-                          </div>
-                        </div>
-                        <div className="text-left md:text-right">
-                          <p className="text-sm text-slate-500 mb-1">Est. Monthly Payment</p>
-                          <p className="text-2xl font-bold text-slate-900">Varies</p>
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-3 gap-4 mb-6 p-4 bg-slate-50 rounded-xl">
-                        <div>
-                          <p className="text-xs text-slate-500 mb-1">APR Range</p>
-                          <p className="font-semibold text-slate-900">Varies by lender</p>
-                        </div>
-                        <div>
-                          <p className="text-xs text-slate-500 mb-1">Loan Amount</p>
-                          <p className="font-semibold text-slate-900">Up to $35,000</p>
-                        </div>
-                        <div>
-                          <p className="text-xs text-slate-500 mb-1">Decision</p>
-                          <p className="font-semibold text-slate-900">As fast as today</p>
-                        </div>
-                      </div>
-
-                      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                        <ul className="space-y-1 w-full md:w-auto">
-                          <li className="flex items-center gap-2 text-sm text-slate-600">
-                            <Check className="w-4 h-4 text-green-500" />
-                            Multiple lender network
-                          </li>
-                          <li className="flex items-center gap-2 text-sm text-slate-600">
-                            <Check className="w-4 h-4 text-green-500" />
-                            Quick online process
-                          </li>
-                        </ul>
-                        <a
-                          href={roundSkyUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          onClick={() => trackLenderClicked({
-                            lenderName: "Round Sky",
-                            lenderRank: sortedOffers.length + 1,
-                            minRate: 0,
-                            estimatedPayment: 0,
-                            loanAmount,
-                          })}
-                          className="w-full md:w-auto inline-flex items-center justify-center gap-2 rounded-xl bg-primary px-8 py-3.5 text-base font-semibold text-white shadow hover:bg-primary/90 transition-all focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 shrink-0"
-                        >
-                          Continue Application
-                          <ArrowRight className="w-4 h-4" />
-                        </a>
-                      </div>
-                    </div>
-                  </div>
                 </div>
-              )}
-
-              {showCalculator && calculatorActive && sortedOffers.length > 0 && (
-                <p className="text-xs text-slate-500 leading-relaxed">
-                  <strong>How we calculate this:</strong> Savings estimates compare the total
-                  interest you'd pay on {formatCurrency(currentDebt)} of credit card debt at your
-                  current {currentApr}% APR vs. the lender's lowest advertised APR, both repaid over
-                  a fixed {COMPARISON_TERM_MONTHS}-month term using standard amortization. Your
-                  actual rate is determined by the lender based on a full credit review and may
-                  differ. Examples are for illustrative purposes only.
-                </p>
               )}
             </div>
 
             {/* Sidebar */}
-            <div className="space-y-6">
-              <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm sticky top-24">
-                <h3 className="font-bold text-slate-900 mb-4">Tips for comparing</h3>
-                <ul className="space-y-4">
-                  <li className="flex gap-3">
-                    <div className="w-6 h-6 rounded-full bg-secondary text-primary flex items-center justify-center text-xs font-bold shrink-0 mt-0.5">1</div>
-                    <p className="text-sm text-slate-600"><strong className="text-slate-900">Look at the APR.</strong> This is the total cost of borrowing. A lower APR means less money paid in interest over time.</p>
-                  </li>
-                  <li className="flex gap-3">
-                    <div className="w-6 h-6 rounded-full bg-secondary text-primary flex items-center justify-center text-xs font-bold shrink-0 mt-0.5">2</div>
-                    <p className="text-sm text-slate-600"><strong className="text-slate-900">Check the fees.</strong> Some lenders charge origination fees. Ensure you read the full terms before signing.</p>
-                  </li>
-                  <li className="flex gap-3">
-                    <div className="w-6 h-6 rounded-full bg-secondary text-primary flex items-center justify-center text-xs font-bold shrink-0 mt-0.5">3</div>
-                    <p className="text-sm text-slate-600"><strong className="text-slate-900">Match the payment.</strong> Ensure the estimated monthly payment fits comfortably within your budget.</p>
-                  </li>
-                </ul>
+            <div className="space-y-6 lg:sticky lg:top-6 lg:self-start">
+              <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+                <div className="flex items-center gap-2 mb-4">
+                  <Shield className="w-5 h-5 text-primary" />
+                  <h3 className="font-bold text-slate-900">Your selection</h3>
+                </div>
+                <div className="space-y-3">
+                  {loanAmount && (
+                    <div className="flex justify-between text-sm">
+                      <span className="text-slate-500">Loan amount</span>
+                      <span className="font-semibold text-slate-900">{formatCurrency(loanAmount)}</span>
+                    </div>
+                  )}
+                  {creditScore && (
+                    <div className="flex justify-between text-sm">
+                      <span className="text-slate-500">Credit score</span>
+                      <span className="font-semibold text-slate-900">{creditScore}</span>
+                    </div>
+                  )}
+                  {loanPurpose && (
+                    <div className="flex justify-between text-sm">
+                      <span className="text-slate-500">Purpose</span>
+                      <span className="font-semibold text-slate-900">{loanPurpose}</span>
+                    </div>
+                  )}
+                </div>
+                <a
+                  href="/apply"
+                  className="mt-4 block text-center text-sm text-primary hover:underline font-medium"
+                >
+                  Update my answers
+                </a>
+              </div>
+
+              <div className="bg-primary/5 rounded-2xl border border-primary/10 p-6">
+                <div className="flex items-center gap-2 mb-3">
+                  <Info className="w-4 h-4 text-primary shrink-0" />
+                  <h3 className="font-bold text-slate-900 text-sm">No credit impact</h3>
+                </div>
+                <p className="text-xs text-slate-600 leading-relaxed">
+                  Clicking any offer only takes you to the lender's site. A hard credit inquiry only happens if you formally apply with that lender.
+                </p>
               </div>
             </div>
-
           </div>
         </div>
       </div>

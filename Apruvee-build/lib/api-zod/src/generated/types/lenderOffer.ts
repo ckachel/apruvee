@@ -5,7 +5,6 @@
  * LoanMatch API specification
  * OpenAPI spec version: 0.1.0
  */
-
 export interface LenderOffer {
   id: number;
   lenderName: string;
@@ -26,4 +25,9 @@ export interface LenderOffer {
   affiliateUrl: string;
   /** Optional badge like Best Rate or Most Popular */
   badgeLabel?: string;
+  /**
+   * Whether this lender has an active affiliate agreement with a tracked URL.
+   * Paid partners are always sorted first on the results page.
+   */
+  isPaidPartner: boolean;
 }
