@@ -32,7 +32,7 @@ export function trackEvent(
   });
 }
 
-// ─── Lead Conversion (existing) ───────────────────────────────────────────────
+// ─── Lead Conversion ───────────────────────────────────────────────────────────
 
 export type LeadConversionParams = {
   loanAmount: number;
@@ -50,7 +50,7 @@ export function trackLeadConversion(params: LeadConversionParams): void {
     state: params.state,
   });
 
-  // Also fire Google Ads conversion
+  // Google Ads — lead conversion (form completion)
   if (typeof window.gtag === "function") {
     window.gtag("event", "conversion", {
       send_to: "AW-18161430115",
@@ -119,6 +119,7 @@ export function trackLenderClicked(params: {
   estimatedPayment: number;
   loanAmount?: number;
 }): void {
+  // GA4 event
   trackEvent("lender_clicked", {
     lender_name: params.lenderName,
     lender_rank: params.lenderRank,
@@ -127,23 +128,34 @@ export function trackLenderClicked(params: {
     loan_amount: params.loanAmount,
     currency: "USD",
   });
+
+  // Google Ads — Lender Click conversion (AW-18161430115/t5KlCKj05LAcEOPchdRD)
+  if (typeof window.gtag === "function") {
+    window.gtag("event", "conversion", {
+      send_to: "AW-18161430115/t5KlCKj05LAcEOPchdRD",
+      value: 1,
+      currency: "USD",
+    });
+  }
 }
 
 // ─── Calculator Events ─────────────────────────────────────────────────────────
 
-export function trackCalculatorOpened(): void {
-  trackEvent("calculator_opened", {});
+export function trackCalculatorOpened(params?: { loanAmount?: number }): void {
+  trackEvent("calculator_opened", {
+    loan_amount: params?.loanAmount,
+  });
 }
 
 export function trackCalculatorUsed(params: {
-  debtAmount: number;
+  debt: number;
   currentApr: number;
-  estimatedSavings: number;
+  loanAmount?: number;
 }): void {
   trackEvent("calculator_used", {
-    debt_amount: params.debtAmount,
+    debt_amount: params.debt,
     current_apr: params.currentApr,
-    estimated_savings: params.estimatedSavings,
+    loan_amount: params.loanAmount,
   });
 }
 
