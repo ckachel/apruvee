@@ -8,6 +8,7 @@ import { useAnalyticsPageViews } from "@/hooks/use-analytics-page-views";
 // Pages
 import Home from "./pages/home";
 import Apply from "./pages/apply";
+import ApplyLandingPage from "./pages/apply-lp";
 import Results from "./pages/results";
 import Privacy from "./pages/privacy";
 import Terms from "./pages/terms";
@@ -30,6 +31,7 @@ function Router() {
     <Switch>
       <Route path="/" component={Home} />
       <Route path="/apply" component={Apply} />
+      <Route path="/lp/apply" component={ApplyLandingPage} />
       <Route path="/results" component={Results} />
       <Route path="/about" component={About} />
       <Route path="/contact" component={Contact} />
