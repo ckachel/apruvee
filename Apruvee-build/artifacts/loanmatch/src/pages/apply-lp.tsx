@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { Shield, Lock, CheckCircle, ArrowRight, ArrowLeft, Star } from "lucide-react";
 import { Link } from "wouter";
@@ -107,7 +107,7 @@ export default function ApplyLandingPage() {
   const [error, setError] = useState<string | null>(null);
 
   // Fire LP variant view + apply_started on mount
-  useState(() => {
+  useEffect(() => {
     if (typeof window !== "undefined" && (window as any).gtag) {
       (window as any).gtag("event", "lp_variant_view", { variant: "apply_direct" });
     }
