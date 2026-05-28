@@ -31,7 +31,7 @@ function Router() {
     <Switch>
       <Route path="/" component={Home} />
       <Route path="/apply" component={Apply} />
-      <Route path="/lp/apply" component={ApplyLandingPage} />
+      <Route path="/apply-lp" component={ApplyLandingPage} />
       <Route path="/results" component={Results} />
       <Route path="/about" component={About} />
       <Route path="/contact" component={Contact} />
