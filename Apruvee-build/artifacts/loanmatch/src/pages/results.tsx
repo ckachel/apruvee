@@ -148,16 +148,14 @@ export default function Results() {
     window.scrollTo(0, 0);
   }, []);
 
-  // Sort offers: non-Round Sky paid partners first (by minRate), then unpaid offers (by minRate).
-  // Round Sky is intentionally excluded here — it renders below Lead Stack cards instead.
+  // Sort offers: all non-Round Sky lenders sorted by minRate only.
+  // Paid partner priority is not used here — Lead Stack cards render above
+  // all direct lender cards and Round Sky renders between Lead Stack and unpaid lenders.
   const sortedOffers: LenderOffer[] = useMemo(() => {
     if (!offers) return [];
     return [...offers]
       .filter((o) => o.lenderName !== "Round Sky")
-      .sort((a, b) => {
-        if (a.isPaidPartner !== b.isPaidPartner) return a.isPaidPartner ? -1 : 1;
-        return a.minRate - b.minRate;
-      });
+      .sort((a, b) => a.minRate - b.minRate);
   }, [offers]);
 
   // Round Sky is pulled out separately so it always renders last — below Lead Stack cards.
@@ -194,9 +192,6 @@ export default function Results() {
     if (offerSavings.size === 0) return 0;
     return Math.max(...Array.from(offerSavings.values()));
   }, [offerSavings]);
-
-  // Total direct lender count (excluding Round Sky) — used for lenderRank offsets below.
-  const directOfferCount = sortedOffers.length;
 
   return (
     <PageWrapper>
@@ -316,84 +311,52 @@ export default function Results() {
               ) : (
                 <div className="space-y-4">
 
-                  {/* ── Direct lender offers (excluding Round Sky) ── */}
-                  {sortedOffers.map((offer, index) => {
-                    const savings = offerSavings.get(offer.id);
-                    const hasBestSavings = savings !== undefined && savings === bestSavings && bestSavings > 0;
-                    const affiliateUrl = buildAffiliateUrl(offer, sessionClickId);
-
+                  {/* ── Lead Stack affiliate cards — always first ──────────────────────
+                      Click-out only — no iFrame, no PII in URL.
+                      Tracking: &sub= (traffic source) + &sub2= (UUID click ID).
+                      Affiliate ID is pre-embedded in each baseUrl by the portal.
+                  ─────────────────────────────────────────────────────────────────── */}
+                  {LEADSTACK_OFFERS.map((offer, index) => {
+                    const trackingUrl = buildLeadStackUrl(offer.baseUrl, sessionClickId, trafficSource);
                     return (
                       <div
                         key={offer.id}
-                        className={`bg-white rounded-2xl border shadow-sm overflow-hidden transition-shadow hover:shadow-md ${
-                          offer.isPaidPartner
-                            ? "border-primary/30 ring-1 ring-primary/10"
-                            : "border-slate-200"
-                        }`}
+                        className="bg-white rounded-2xl border border-primary/30 ring-1 ring-primary/10 shadow-sm overflow-hidden transition-shadow hover:shadow-md"
                       >
-                        {offer.isPaidPartner && (
-                          <div className="bg-primary/5 border-b border-primary/10 px-6 py-1.5 flex items-center gap-1.5">
-                            <Star className="w-3 h-3 text-primary fill-primary" />
-                            <span className="text-xs font-semibold text-primary tracking-wide uppercase">
-                              Sponsored
-                            </span>
-                          </div>
-                        )}
+                        {/* Sponsored badge — identical markup to Round Sky */}
+                        <div className="bg-primary/5 border-b border-primary/10 px-6 py-1.5 flex items-center gap-1.5">
+                          <Star className="w-3 h-3 text-primary fill-primary" />
+                          <span className="text-xs font-semibold text-primary tracking-wide uppercase">
+                            Sponsored
+                          </span>
+                        </div>
 
                         <div className="p-6">
-                          <div className="flex items-start justify-between mb-6">
-                            <div className="flex items-center gap-4">
-                              <div className="w-14 h-14 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-lg shrink-0">
-                                {offer.lenderName.charAt(0)}
-                              </div>
-                              <div>
-                                <div className="flex items-center gap-2 flex-wrap">
-                                  <h3 className="text-xl font-bold text-slate-900">{offer.lenderName}</h3>
-                                  {offer.badgeLabel && !offer.isPaidPartner && (
-                                    <span className="text-xs font-semibold bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded-full border border-emerald-200">
-                                      {offer.badgeLabel}
-                                    </span>
-                                  )}
-                                </div>
-                                {hasBestSavings && savings !== undefined && (
-                                  <p className="text-sm text-emerald-600 font-semibold mt-0.5">
-                                    Save up to {formatCurrency(savings)} in interest
-                                  </p>
-                                )}
-                              </div>
+                          <div className="flex items-center gap-4 mb-6">
+                            <div className="w-14 h-14 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-lg shrink-0">
+                              {offer.name.charAt(0)}
                             </div>
-                            <div className="text-right shrink-0 ml-4">
-                              <p className="text-sm text-slate-500 mb-1">Est. Monthly Payment</p>
-                              <p className="text-2xl font-bold text-slate-900">
-                                {formatCurrency(offer.estimatedMonthlyPayment)}
-                              </p>
-                            </div>
+                            <h3 className="text-xl font-bold text-slate-900">{offer.name}</h3>
                           </div>
 
                           <div className="grid grid-cols-3 gap-4 mb-6 p-4 bg-slate-50 rounded-xl">
                             <div>
                               <p className="text-xs text-slate-500 mb-1">APR Range</p>
-                              <p className="font-semibold text-slate-900">
-                                {offer.minRate.toFixed(2)}% – {offer.maxRate.toFixed(2)}%
-                              </p>
+                              <p className="font-semibold text-slate-900">{offer.aprRange}</p>
                             </div>
                             <div>
                               <p className="text-xs text-slate-500 mb-1">Loan Amount</p>
-                              <p className="font-semibold text-slate-900">
-                                {formatCurrency(offer.minAmount)} – {formatCurrency(offer.maxAmount)}
-                              </p>
+                              <p className="font-semibold text-slate-900">{offer.loanRange}</p>
                             </div>
                             <div>
                               <p className="text-xs text-slate-500 mb-1">Term</p>
-                              <p className="font-semibold text-slate-900">
-                                {offer.minTerm}–{offer.maxTerm} mo
-                              </p>
+                              <p className="font-semibold text-slate-900">{offer.termRange}</p>
                             </div>
                           </div>
 
                           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                             <ul className="space-y-1 w-full md:w-auto">
-                              {offer.features.slice(0, 3).map((feature) => (
+                              {offer.features.map((feature) => (
                                 <li key={feature} className="flex items-center gap-2 text-sm text-slate-600">
                                   <Check className="w-4 h-4 text-green-500 shrink-0" />
                                   {feature}
@@ -401,138 +364,38 @@ export default function Results() {
                               ))}
                             </ul>
                             <a
-                              href={affiliateUrl}
+                              href={trackingUrl}
                               target="_blank"
                               rel="noopener noreferrer"
                               onClick={() =>
                                 trackLenderClicked({
-                                  lenderName: offer.lenderName,
+                                  lenderName: offer.name,
                                   lenderRank: index + 1,
-                                  minRate: offer.minRate,
-                                  estimatedPayment: offer.estimatedMonthlyPayment,
+                                  minRate: 5.99,
+                                  estimatedPayment: 0,
                                   loanAmount,
                                 })
                               }
-                              className={`inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl font-semibold text-sm transition-all whitespace-nowrap shrink-0 ${
-                                offer.isPaidPartner
-                                  ? "bg-primary text-white hover:bg-primary/90 shadow-sm"
-                                  : "bg-slate-900 text-white hover:bg-slate-700"
-                              }`}
+                              className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl font-semibold text-sm transition-all whitespace-nowrap shrink-0 bg-primary text-white hover:bg-primary/90 shadow-sm"
                             >
                               Check My Rate
                               <ArrowRight className="w-4 h-4" />
                             </a>
                           </div>
-
-                          {!offer.isPaidPartner && (
-                            <p className="text-xs text-slate-400 mt-4">
-                              Apruvee does not currently have an affiliate agreement with {offer.lenderName}. This listing is for informational purposes only.
-                            </p>
-                          )}
                         </div>
                       </div>
                     );
                   })}
 
-                  {/* ── Lead Stack affiliate cards ─────────────────────────────────────
-                      Rendered below all direct lender offers.
-                      Click-out only — no iFrame, no PII in URL.
-                      Tracking: &sub= (traffic source) + &sub2= (UUID click ID).
-                      Affiliate ID is pre-embedded in each baseUrl by the portal.
-                  ─────────────────────────────────────────────────────────────────── */}
-                  {!isLoading && (
-                    <>
-                      <div className="flex items-center gap-3 pt-2">
-                        <div className="flex-1 h-px bg-slate-200" />
-                        <span className="text-xs text-slate-400 font-medium whitespace-nowrap">
-                          More options from our network
-                        </span>
-                        <div className="flex-1 h-px bg-slate-200" />
-                      </div>
-
-                      {LEADSTACK_OFFERS.map((offer, index) => {
-                        const trackingUrl = buildLeadStackUrl(offer.baseUrl, sessionClickId, trafficSource);
-                        return (
-                          <div
-                            key={offer.id}
-                            className="bg-white rounded-2xl border border-primary/30 ring-1 ring-primary/10 shadow-sm overflow-hidden transition-shadow hover:shadow-md"
-                          >
-                            {/* Sponsored badge — identical to Round Sky / paid direct lenders */}
-                            <div className="bg-primary/5 border-b border-primary/10 px-6 py-1.5 flex items-center gap-1.5">
-                              <Star className="w-3 h-3 text-primary fill-primary" />
-                              <span className="text-xs font-semibold text-primary tracking-wide uppercase">
-                                Sponsored
-                              </span>
-                            </div>
-
-                            <div className="p-6">
-                              <div className="flex items-center gap-4 mb-6">
-                                <div className="w-14 h-14 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-lg shrink-0">
-                                  {offer.name.charAt(0)}
-                                </div>
-                                <h3 className="text-xl font-bold text-slate-900">{offer.name}</h3>
-                              </div>
-
-                              <div className="grid grid-cols-3 gap-4 mb-6 p-4 bg-slate-50 rounded-xl">
-                                <div>
-                                  <p className="text-xs text-slate-500 mb-1">APR Range</p>
-                                  <p className="font-semibold text-slate-900">{offer.aprRange}</p>
-                                </div>
-                                <div>
-                                  <p className="text-xs text-slate-500 mb-1">Loan Amount</p>
-                                  <p className="font-semibold text-slate-900">{offer.loanRange}</p>
-                                </div>
-                                <div>
-                                  <p className="text-xs text-slate-500 mb-1">Term</p>
-                                  <p className="font-semibold text-slate-900">{offer.termRange}</p>
-                                </div>
-                              </div>
-
-                              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                                <ul className="space-y-1 w-full md:w-auto">
-                                  {offer.features.map((feature) => (
-                                    <li key={feature} className="flex items-center gap-2 text-sm text-slate-600">
-                                      <Check className="w-4 h-4 text-green-500 shrink-0" />
-                                      {feature}
-                                    </li>
-                                  ))}
-                                </ul>
-                                <a
-                                  href={trackingUrl}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  onClick={() =>
-                                    trackLenderClicked({
-                                      lenderName: offer.name,
-                                      lenderRank: directOfferCount + index + 1,
-                                      minRate: 5.99,
-                                      estimatedPayment: 0,
-                                      loanAmount,
-                                    })
-                                  }
-                                  className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl font-semibold text-sm transition-all whitespace-nowrap shrink-0 bg-primary text-white hover:bg-primary/90 shadow-sm"
-                                >
-                                  Check My Rate
-                                  <ArrowRight className="w-4 h-4" />
-                                </a>
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </>
-                  )}
-
-                  {/* ── Round Sky — always last ────────────────────────────────────────
-                      Rendered after all direct lender cards and all Lead Stack cards.
+                  {/* ── Round Sky — always after Lead Stack, before unpaid lenders ────
                       Uses sessionClickId via subId3 for postback tracking.
                   ─────────────────────────────────────────────────────────────────── */}
-                  {!isLoading && roundSkyOffer && (() => {
+                  {roundSkyOffer && (() => {
                     const offer = roundSkyOffer;
                     const savings = offerSavings.get(offer.id);
                     const hasBestSavings = savings !== undefined && savings === bestSavings && bestSavings > 0;
                     const affiliateUrl = buildAffiliateUrl(offer, sessionClickId);
-                    const rankPosition = directOfferCount + LEADSTACK_OFFERS.length + 1;
+                    const rankPosition = LEADSTACK_OFFERS.length + 1;
 
                     return (
                       <div className="bg-white rounded-2xl border border-primary/30 ring-1 ring-primary/10 shadow-sm overflow-hidden transition-shadow hover:shadow-md">
@@ -626,6 +489,106 @@ export default function Results() {
                       </div>
                     );
                   })()}
+
+                  {/* ── Non-paid direct lender offers — always last, sorted by minRate ── */}
+                  {sortedOffers.map((offer, index) => {
+                    const savings = offerSavings.get(offer.id);
+                    const hasBestSavings = savings !== undefined && savings === bestSavings && bestSavings > 0;
+                    const affiliateUrl = buildAffiliateUrl(offer, sessionClickId);
+                    const rankPosition = LEADSTACK_OFFERS.length + (roundSkyOffer ? 1 : 0) + index + 1;
+
+                    return (
+                      <div
+                        key={offer.id}
+                        className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden transition-shadow hover:shadow-md"
+                      >
+                        <div className="p-6">
+                          <div className="flex items-start justify-between mb-6">
+                            <div className="flex items-center gap-4">
+                              <div className="w-14 h-14 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-lg shrink-0">
+                                {offer.lenderName.charAt(0)}
+                              </div>
+                              <div>
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <h3 className="text-xl font-bold text-slate-900">{offer.lenderName}</h3>
+                                  {offer.badgeLabel && (
+                                    <span className="text-xs font-semibold bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded-full border border-emerald-200">
+                                      {offer.badgeLabel}
+                                    </span>
+                                  )}
+                                </div>
+                                {hasBestSavings && savings !== undefined && (
+                                  <p className="text-sm text-emerald-600 font-semibold mt-0.5">
+                                    Save up to {formatCurrency(savings)} in interest
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+                            <div className="text-right shrink-0 ml-4">
+                              <p className="text-sm text-slate-500 mb-1">Est. Monthly Payment</p>
+                              <p className="text-2xl font-bold text-slate-900">
+                                {formatCurrency(offer.estimatedMonthlyPayment)}
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-3 gap-4 mb-6 p-4 bg-slate-50 rounded-xl">
+                            <div>
+                              <p className="text-xs text-slate-500 mb-1">APR Range</p>
+                              <p className="font-semibold text-slate-900">
+                                {offer.minRate.toFixed(2)}% – {offer.maxRate.toFixed(2)}%
+                              </p>
+                            </div>
+                            <div>
+                              <p className="text-xs text-slate-500 mb-1">Loan Amount</p>
+                              <p className="font-semibold text-slate-900">
+                                {formatCurrency(offer.minAmount)} – {formatCurrency(offer.maxAmount)}
+                              </p>
+                            </div>
+                            <div>
+                              <p className="text-xs text-slate-500 mb-1">Term</p>
+                              <p className="font-semibold text-slate-900">
+                                {offer.minTerm}–{offer.maxTerm} mo
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                            <ul className="space-y-1 w-full md:w-auto">
+                              {offer.features.slice(0, 3).map((feature) => (
+                                <li key={feature} className="flex items-center gap-2 text-sm text-slate-600">
+                                  <Check className="w-4 h-4 text-green-500 shrink-0" />
+                                  {feature}
+                                </li>
+                              ))}
+                            </ul>
+                            <a
+                              href={affiliateUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              onClick={() =>
+                                trackLenderClicked({
+                                  lenderName: offer.lenderName,
+                                  lenderRank: rankPosition,
+                                  minRate: offer.minRate,
+                                  estimatedPayment: offer.estimatedMonthlyPayment,
+                                  loanAmount,
+                                })
+                              }
+                              className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl font-semibold text-sm transition-all whitespace-nowrap shrink-0 bg-slate-900 text-white hover:bg-slate-700"
+                            >
+                              Check My Rate
+                              <ArrowRight className="w-4 h-4" />
+                            </a>
+                          </div>
+
+                          <p className="text-xs text-slate-400 mt-4">
+                            Apruvee does not currently have an affiliate agreement with {offer.lenderName}. This listing is for informational purposes only.
+                          </p>
+                        </div>
+                      </div>
+                    );
+                  })}
 
                 </div>
               )}
