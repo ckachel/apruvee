@@ -4,6 +4,7 @@
     "builder": "NIXPACKS"
   },
   "deploy": {
+    "preDeployCommand": "./lib/db/node_modules/.bin/drizzle-kit push --config=lib/db/drizzle.config.ts",
     "healthcheckPath": "/api/healthz",
     "healthcheckTimeout": 120,
     "restartPolicyType": "ON_FAILURE",
