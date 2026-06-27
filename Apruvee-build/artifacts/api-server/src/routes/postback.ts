@@ -16,7 +16,7 @@ const router = Router();
  *   [sub]        → traffic source label we passed (google | seo | bing | direct)
  *   [sub2]       → UUID click ID — matches back to the originating session
  */
-router.get("/api/postback/leadstack", async (req, res) => {
+router.get("/postback/leadstack", async (req, res) => {
   const { commission, sub, clickId } = req.query;
 
   // Respond 200 immediately — Lead Stack expects a fast acknowledgement.
