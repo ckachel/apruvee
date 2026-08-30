@@ -236,7 +236,7 @@ export default function Results() {
         <div className="bg-primary text-white py-12 px-4">
           <div className="container mx-auto max-w-5xl">
             <h1 className="text-3xl md:text-4xl font-bold mb-4">
-              {isLoading ? "Finding your best matches..." : `Great news! We found ${sortedOffers.length} offers for you.`}
+              {isLoading ? "Finding your best matches..." : `Great news! We found ${totalOfferCount} offers for you.`}
             </h1>
             <div className="flex items-center gap-2 text-primary-foreground/80 text-sm font-medium">
               <Shield className="w-4 h-4" />
