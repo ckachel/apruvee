@@ -31,9 +31,36 @@ function buildAffiliateUrl(offer: LenderOffer, clickId: string): string {
 }
 
 // Credible — direct affiliate partner, always the top card on the page.
-// UTM-only link (Credible doesn't provide a click-ID slot). Rate (7.99%) confirmed by Credible, Aug 2026.
-const CREDIBLE_URL =
-  "https://www.credible.com/personal-loan-prequalification?utm_source=apruvee&utm_medium=referral&utm_campaign=personal_loans&utm_content=results_top_card";
+// Rate (7.99%) confirmed by Credible, Aug 2026.
+const CREDIBLE_BASE_URL =
+  "https://www.credible.com/personal-loan-prequalification?utm_source=apruvee&utm_medium=referral&utm_campaign=personal_loans";
+
+// Optional aliases so Credible's utm_content uses Apruvee's preferred channel
+// name even when an ad platform's own utm_source differs (e.g. Microsoft Ads
+// traffic often arrives tagged utm_source=bing). Anything NOT listed here
+// passes through unchanged — a brand-new channel (e.g. "tiktok") works with
+// zero code changes, as long as its campaigns are tagged with that utm_source.
+const CREDIBLE_CHANNEL_ALIASES: Record<string, string> = {
+  bing: "microsoft",
+  facebook: "facebook_ads",
+  email: "crm",
+};
+
+/**
+ * Reads utm_source off the current URL and maps it to the channel label
+ * Credible's utm_content should carry. Falls back to "direct" if no
+ * utm_source is present (e.g. someone lands here without campaign tagging).
+ */
+function getCredibleChannel(): string {
+  const params = new URLSearchParams(window.location.search);
+  const utmSource = (params.get("utm_source") || "").toLowerCase().trim();
+  if (!utmSource) return "direct";
+  return CREDIBLE_CHANNEL_ALIASES[utmSource] ?? utmSource;
+}
+
+function buildCredibleUrl(channel: string): string {
+  return `${CREDIBLE_BASE_URL}&utm_content=${encodeURIComponent(channel)}`;
+}
 
 // ─── Lead Stack Offers ────────────────────────────────────────────────────────
 // Tracking params confirmed from pdvportal.com Offer Marketplace (Jun 24 2026):
@@ -133,6 +160,12 @@ export default function Results() {
 
   // Stable traffic source detection — runs once on mount.
   const [trafficSource] = useState<string>(() => detectTrafficSource());
+
+  // Credible's utm_content — detected once per page load from utm_source, independent
+  // of Lead Stack's trafficSource (Lead Stack needs a fixed small enum; Credible's
+  // channel label is open-ended and passes through new utm_source values as-is).
+  const [credibleChannel] = useState<string>(() => getCredibleChannel());
+  const credibleUrl = useMemo(() => buildCredibleUrl(credibleChannel), [credibleChannel]);
 
   const [currentDebt, setCurrentDebt] = useState<number>(loanAmount ?? 15000);
   const hasTrackedResults = useRef(false);
@@ -399,7 +432,7 @@ export default function Results() {
                           </li>
                         </ul>
                         <a
-                          href={CREDIBLE_URL}
+                          href={credibleUrl}
                           target="_blank"
                           rel="noopener noreferrer"
                           onClick={() =>
