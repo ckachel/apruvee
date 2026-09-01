@@ -45,7 +45,7 @@ const DEFAULT_SUBTITLE =
 export function DebtConsolidationCalculator({
   defaultDebt = 15000,
   defaultCurrentApr = 24,
-  defaultNewApr = 12,
+  defaultNewApr = 7.99,
   defaultTermMonths = 60,
   variant = "card",
   title = DEFAULT_TITLE,
