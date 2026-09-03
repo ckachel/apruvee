@@ -189,7 +189,16 @@ export default function Results() {
   const [currentDebt, setCurrentDebt] = useState<number>(loanAmount ?? 15000);
   const hasTrackedResults = useRef(false);
   const [currentApr, setCurrentApr] = useState<number>(24);
-  const [showCalculator, setShowCalculator] = useState(false);
+
+  // Open the savings calculator by default for users who told us during apply
+  // that they're specifically consolidating/paying off credit card debt —
+  // this is the segment where Credible's personalized savings number is most
+  // relevant, and we don't want it hidden behind an extra click. Computed
+  // inline here (rather than reusing isCreditCardConsolidator below) since
+  // useState's initializer runs before that constant is declared.
+  const [showCalculator, setShowCalculator] = useState(
+    () => !!loanPurpose && CREDIT_CARD_PURPOSES.has(loanPurpose) && !!loanAmount && loanAmount >= 1000
+  );
 
   const calculatorActive = currentDebt >= 1000 && currentApr > 0;
 
@@ -203,6 +212,18 @@ export default function Results() {
 
   useEffect(() => {
     window.scrollTo(0, 0);
+  }, []);
+
+  // Fires calculator_opened once on mount if the calculator was auto-opened
+  // by the credit-card-purpose default above (see showCalculator's
+  // initializer). Manual opens via the toggle button are tracked separately
+  // by that button's own onClick handler — this only covers the auto-open
+  // case so it isn't double-counted.
+  useEffect(() => {
+    if (showCalculator) {
+      trackCalculatorOpened({ loanAmount });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // NOTE: sortedOffers/offerSavings/bestSavings still compute against the raw
