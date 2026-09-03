@@ -2,21 +2,16 @@ import { useLocation } from "wouter";
 import { PageWrapper } from "@/components/layout/page-wrapper";
 import { useListOffers, getListOffersQueryKey } from "@workspace/api-client-react";
 import { Shield, Check, Info, ArrowRight, Star, TrendingDown, ChevronDown, ChevronUp } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState, useRef } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
 import {
   trackResultsViewed,
   trackLenderClicked,
   trackCalculatorOpened,
   trackCalculatorUsed,
 } from "@/lib/analytics";
-import { calculateTotalInterest, formatCurrency } from "@/lib/loan-math";
-import {
-  DebtConsolidationCalculator,
-  type DebtConsolidationCalculatorValues,
-} from "@/components/debt-consolidation-calculator";
+import { formatCurrency } from "@/lib/loan-math";
+import { DebtConsolidationCalculator } from "@/components/debt-consolidation-calculator";
 import type { LenderOffer } from "@workspace/api-client-react";
-
-const COMPARISON_TERM_MONTHS = 60;
 
 // Round Sky's affiliate base URL — subId3 is injected at render time with a
 // per-session UUID so each click is individually trackable without storing PII.
@@ -62,24 +57,9 @@ function buildCredibleUrl(channel: string): string {
   return `${CREDIBLE_BASE_URL}&utm_content=${encodeURIComponent(channel)}`;
 }
 
-// Credible's lowest confirmed rate — used as the comparison rate for the
-// savings calculator on Credible's card (the calculator's own "current APR"
-// input still defaults separately, representing the user's existing debt).
+// Credible's lowest confirmed rate — used as the default "New Loan APR" for
+// Credible's embedded savings calculator (LenderSavingsPanel below).
 const CREDIBLE_RATE = 7.99;
-
-// loanPurpose values (from apply.tsx / apply-lp.tsx) that indicate the user
-// is specifically trying to consolidate/pay off credit card debt. Used to
-// show an up-front savings estimate on Credible's card without requiring
-// the user to open the interactive calculator first.
-const CREDIT_CARD_PURPOSES = new Set(["Debt Consolidation", "Credit Card Payoff"]);
-
-// Baseline APR assumption used ONLY for the up-front estimate below, before
-// a user has entered their real current APR into the calculator. This is
-// the same "24% APR" assumption already used elsewhere on the site (e.g.
-// the homepage headline "Stop paying 24% APR") as a stand-in for the
-// national average credit card rate — not a claim about any individual
-// user's actual rate.
-const ASSUMED_CREDIT_CARD_APR = 24;
 
 // Credible's Trustpilot social proof. NON-EVERGREEN — per Credible's "Out of
 // Date Information" guidance, this must carry a visible "as of" date, and
@@ -107,6 +87,7 @@ interface LeadStackOffer {
   id: string;
   name: string;
   baseUrl: string;
+  minRate: number;
   aprRange: string;
   loanRange: string;
   termRange: string;
@@ -118,6 +99,7 @@ const LEADSTACK_OFFERS: LeadStackOffer[] = [
     id: "lowcreditfinance",
     name: "Low Credit Finance",
     baseUrl: "https://lowcreditfinance.com/?aff166052",
+    minRate: 5.99,
     aprRange: "5.99% – 35.99%",
     loanRange: "$1,000 – $50,000",
     termRange: "12 – 60 mo",
@@ -127,6 +109,7 @@ const LEADSTACK_OFFERS: LeadStackOffer[] = [
     id: "borrowmoney",
     name: "BorrowMoney.us",
     baseUrl: "https://borrowmoney.us/?aff166053",
+    minRate: 5.99,
     aprRange: "5.99% – 35.99%",
     loanRange: "$1,000 – $50,000",
     termRange: "12 – 60 mo",
@@ -136,6 +119,7 @@ const LEADSTACK_OFFERS: LeadStackOffer[] = [
     id: "goodcreditloans",
     name: "Good Credit Loans",
     baseUrl: "https://goodcreditloans.com/?aff166041",
+    minRate: 5.99,
     aprRange: "5.99% – 35.99%",
     loanRange: "$1,000 – $50,000",
     termRange: "12 – 60 mo",
@@ -145,6 +129,7 @@ const LEADSTACK_OFFERS: LeadStackOffer[] = [
     id: "triballoans",
     name: "TribalLoans.com",
     baseUrl: "https://triballoans.com/?aff166037",
+    minRate: 5.99,
     aprRange: "5.99% – 35.99%",
     loanRange: "$1,000 – $50,000",
     termRange: "12 – 60 mo",
@@ -173,6 +158,100 @@ function detectTrafficSource(): string {
  */
 function buildLeadStackUrl(baseUrl: string, clickId: string, source: string): string {
   return `${baseUrl}&sub=${encodeURIComponent(source)}&sub2=${encodeURIComponent(clickId)}`;
+}
+
+// Embeds the real savings calculator inside a lender's card, defaulted to
+// that lender's own low-end rate. Collapsible; Credible defaults open,
+// everyone else defaults closed (per design decision, Sep 2026).
+//
+// Compliance note on the rate default + copy:
+//  - Using the low end of a lender's rate range as the calculator default is
+//    supported by Credible's own "As Low As XX%" guidance, PROVIDED it's
+//    clearly disclosed as a best-case number for well-qualified applicants —
+//    see rateNote below, reused across all six cards.
+//  - Round Sky's compliance terms explicitly prohibit the literal phrases
+//    "Lowest rate" and "Best" in marketing copy. This component (and the
+//    rateNote text passed into it) avoids those words everywhere — "As low
+//    as X%" is a different, Credible-approved construction, not the banned
+//    bare phrase. Applied the same conservative wording to Lead Stack too,
+//    since there's no published guidance for them either way.
+function LenderSavingsPanel({
+  lenderName,
+  defaultNewApr,
+  defaultOpen,
+  loanAmount,
+  variant = "card",
+}: {
+  lenderName: string;
+  defaultNewApr: number;
+  defaultOpen: boolean;
+  loanAmount?: number;
+  variant?: "card" | "hero";
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  const hasTrackedOpen = useRef(false);
+
+  // Tracks calculator_opened once if this panel starts open by default
+  // (currently: Credible only) — manual opens are tracked in the toggle
+  // button's onClick below, same pattern as the old shared calculator.
+  useEffect(() => {
+    if (defaultOpen && !hasTrackedOpen.current) {
+      hasTrackedOpen.current = true;
+      // ASSUMPTION: trackCalculatorOpened/trackCalculatorUsed accept an
+      // optional lenderName field. I don't have @/lib/analytics' source, so
+      // this couldn't be verified against its actual type signature —
+      // please confirm before shipping, or drop lenderName from these calls
+      // if it isn't a recognized field.
+      trackCalculatorOpened({ loanAmount, lenderName });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const rateNote = `As low as ${defaultNewApr.toFixed(2)}%*. Assumes a well-qualified applicant — your actual rate may be higher based on your credit profile.`;
+
+  return (
+    <div className={variant === "hero" ? "mt-2" : "mt-4 pt-4 border-t border-slate-100"}>
+      <button
+        type="button"
+        onClick={() => {
+          const next = !open;
+          setOpen(next);
+          if (next && !hasTrackedOpen.current) {
+            hasTrackedOpen.current = true;
+            trackCalculatorOpened({ loanAmount, lenderName });
+          }
+        }}
+        className="w-full flex items-center justify-between text-left text-slate-900"
+      >
+        <span className="inline-flex items-center gap-2 text-sm font-semibold">
+          <TrendingDown className="w-4 h-4 text-primary" />
+          See how much you could save
+        </span>
+        {open ? <ChevronUp className="w-4 h-4 text-slate-400" /> : <ChevronDown className="w-4 h-4 text-slate-400" />}
+      </button>
+
+      {open && (
+        <div className="mt-3">
+          <p className={`text-[11px] mb-3 ${variant === "hero" ? "text-primary-foreground/80" : "text-slate-400"}`}>
+            {rateNote}
+          </p>
+          <DebtConsolidationCalculator
+            variant={variant}
+            defaultDebt={loanAmount ?? 15000}
+            defaultNewApr={defaultNewApr}
+            onInputsChange={(values) =>
+              trackCalculatorUsed({
+                debt: values.debt,
+                currentApr: values.currentApr,
+                loanAmount,
+                lenderName,
+              })
+            }
+          />
+        </div>
+      )}
+    </div>
+  );
 }
 
 // Renders a 5-star row with proportional fill for a rating like 4.8 — four
@@ -224,51 +303,15 @@ export default function Results() {
   const [credibleChannel] = useState<string>(() => getCredibleChannel());
   const credibleUrl = useMemo(() => buildCredibleUrl(credibleChannel), [credibleChannel]);
 
-  const [currentDebt, setCurrentDebt] = useState<number>(loanAmount ?? 15000);
   const hasTrackedResults = useRef(false);
-  const [currentApr, setCurrentApr] = useState<number>(24);
-
-  // Open the savings calculator by default for users who told us during apply
-  // that they're specifically consolidating/paying off credit card debt —
-  // this is the segment where Credible's personalized savings number is most
-  // relevant, and we don't want it hidden behind an extra click. Computed
-  // inline here (rather than reusing isCreditCardConsolidator below) since
-  // useState's initializer runs before that constant is declared.
-  const [showCalculator, setShowCalculator] = useState(
-    () => !!loanPurpose && CREDIT_CARD_PURPOSES.has(loanPurpose) && !!loanAmount && loanAmount >= 1000
-  );
-
-  const calculatorActive = currentDebt >= 1000 && currentApr > 0;
-
-  const handleCalculatorChange = useCallback(
-    (values: DebtConsolidationCalculatorValues) => {
-      setCurrentDebt(values.debt);
-      setCurrentApr(values.currentApr);
-    },
-    [],
-  );
 
   useEffect(() => {
     window.scrollTo(0, 0);
   }, []);
 
-  // Fires calculator_opened once on mount if the calculator was auto-opened
-  // by the credit-card-purpose default above (see showCalculator's
-  // initializer). Manual opens via the toggle button are tracked separately
-  // by that button's own onClick handler — this only covers the auto-open
-  // case so it isn't double-counted.
-  useEffect(() => {
-    if (showCalculator) {
-      trackCalculatorOpened({ loanAmount });
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // NOTE: sortedOffers/offerSavings/bestSavings still compute against the raw
-  // "offers" API response (minus Round Sky) for use by Round Sky's own savings
-  // badge below. The unpaid-placeholder lender cards that USED to render from
-  // this list have been removed from the page — see "REMOVED SECTION" note
-  // further down for why.
+  // NOTE: sortedOffers is kept only for the trackResultsViewed offerCount
+  // below and no longer renders as cards — see "REMOVED SECTION" note
+  // further down for why the unpaid-placeholder cards were dropped.
   const sortedOffers: LenderOffer[] = useMemo(() => {
     if (!offers) return [];
     return [...offers]
@@ -292,57 +335,6 @@ export default function Results() {
       });
     }
   }, [isLoading, sortedOffers.length, loanAmount, creditScore]);
-
-  const offerSavings = useMemo(() => {
-    type OfferId = LenderOffer["id"];
-    if (!calculatorActive || !showCalculator) return new Map<OfferId, number>();
-    const map = new Map<OfferId, number>();
-    const currentInterest = calculateTotalInterest(currentDebt, currentApr, COMPARISON_TERM_MONTHS);
-    for (const offer of sortedOffers) {
-      const offerInterest = calculateTotalInterest(currentDebt, offer.minRate, COMPARISON_TERM_MONTHS);
-      const savings = currentInterest - offerInterest;
-      map.set(offer.id, savings);
-    }
-    return map;
-  }, [calculatorActive, currentDebt, currentApr, sortedOffers, showCalculator]);
-
-  const bestSavings = useMemo(() => {
-    if (offerSavings.size === 0) return 0;
-    return Math.max(...Array.from(offerSavings.values()));
-  }, [offerSavings]);
-
-  // Whether the user told us (via the apply flow) that they're specifically
-  // trying to consolidate/pay off credit card debt — this gates the
-  // up-front, pre-calculator estimate on Credible's card.
-  const isCreditCardConsolidator =
-    !!loanPurpose && CREDIT_CARD_PURPOSES.has(loanPurpose) && !!loanAmount && loanAmount >= 1000;
-
-  // Savings shown on Credible's card specifically — compared against
-  // Credible's confirmed 7.99% rate, independent of the offerSavings map
-  // (which is keyed off the "offers" API response and doesn't include
-  // Credible, since Credible isn't part of that data source).
-  //
-  // Two sources, in priority order:
-  //  1. If the user has opened the calculator and entered real numbers,
-  //     use THEIR debt amount and THEIR current APR — this is the accurate,
-  //     personalized figure.
-  //  2. Otherwise, if they told us during apply that their purpose is
-  //     credit card consolidation/payoff, show an estimate using their
-  //     stated loan amount and the ASSUMED_CREDIT_CARD_APR baseline, so the
-  //     card isn't empty before they've touched the calculator. Clearly
-  //     labeled as an estimate in the UI (see isCredibleSavingsEstimate).
-  const usingCalculatorInputs = calculatorActive && showCalculator;
-  const credibleSavingsDebt = usingCalculatorInputs ? currentDebt : loanAmount ?? 0;
-  const credibleSavingsApr = usingCalculatorInputs ? currentApr : ASSUMED_CREDIT_CARD_APR;
-  const isCredibleSavingsEstimate = !usingCalculatorInputs;
-
-  const credibleSavings = useMemo(() => {
-    const shouldShow = usingCalculatorInputs || isCreditCardConsolidator;
-    if (!shouldShow || credibleSavingsDebt < 1000 || credibleSavingsApr <= 0) return 0;
-    const currentInterest = calculateTotalInterest(credibleSavingsDebt, credibleSavingsApr, COMPARISON_TERM_MONTHS);
-    const credibleInterest = calculateTotalInterest(credibleSavingsDebt, CREDIBLE_RATE, COMPARISON_TERM_MONTHS);
-    return currentInterest - credibleInterest;
-  }, [usingCalculatorInputs, isCreditCardConsolidator, credibleSavingsDebt, credibleSavingsApr]);
 
   // ─── Card order & rank tracking — single source of truth ──────────────────
   // Every paid-partner section that can render is listed here, in the exact
@@ -458,30 +450,6 @@ export default function Results() {
                     {CREDIBLE_TRUSTPILOT.asOf}.
                   </p>
 
-                  {credibleSavings > 0 && (
-                    <div className="mb-6">
-                      <p className="text-sm text-emerald-600 font-semibold">
-                        Save up to {formatCurrency(credibleSavings)} in interest
-                      </p>
-                      {isCredibleSavingsEstimate && (
-                        <p className="text-[11px] text-slate-400 mt-0.5">
-                          Estimate based on a {ASSUMED_CREDIT_CARD_APR}% APR, the average U.S. credit card
-                          rate.{" "}
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setShowCalculator(true);
-                              trackCalculatorOpened({ loanAmount });
-                            }}
-                            className="text-primary hover:underline font-medium"
-                          >
-                            Calculate your real savings
-                          </button>
-                        </p>
-                      )}
-                    </div>
-                  )}
-
                   <div className="grid grid-cols-3 gap-4 mb-6 p-4 bg-slate-50 rounded-xl">
                     <div>
                       <p className="text-xs text-slate-500 mb-1">APR</p>
@@ -540,49 +508,15 @@ export default function Results() {
                       See how we work with partners
                     </a>.
                   </p>
+
+                  <LenderSavingsPanel
+                    lenderName="Credible"
+                    defaultNewApr={CREDIBLE_RATE}
+                    defaultOpen={true}
+                    loanAmount={loanAmount}
+                    variant="hero"
+                  />
                 </div>
-              </div>
-
-              {/* Collapsible Savings Calculator */}
-              <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-                <button
-                  onClick={() => {
-                    const next = !showCalculator;
-                    setShowCalculator(next);
-                    if (next) trackCalculatorOpened({ loanAmount });
-                  }}
-                  className="w-full flex items-center justify-between p-4 text-left hover:bg-slate-50 transition-colors"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-full bg-secondary text-primary flex items-center justify-center">
-                      <TrendingDown className="w-4 h-4" />
-                    </div>
-                    <div>
-                      <p className="font-semibold text-slate-900 text-sm">See how much you could save</p>
-                      {!showCalculator && calculatorActive && bestSavings > 0 && (
-                        <p className="text-xs text-emerald-600 font-medium">Tap to calculate your savings</p>
-                      )}
-                    </div>
-                  </div>
-                  {showCalculator ? (
-                    <ChevronUp className="w-5 h-5 text-slate-400" />
-                  ) : (
-                    <ChevronDown className="w-5 h-5 text-slate-400" />
-                  )}
-                </button>
-
-                {showCalculator && (
-                  <div className="px-4 pb-4 border-t border-slate-100">
-                    <DebtConsolidationCalculator
-                      initialDebt={currentDebt}
-                      initialApr={currentApr}
-                      onChange={(values) => {
-                        handleCalculatorChange(values);
-                        trackCalculatorUsed({ debt: values.debt, currentApr: values.currentApr, loanAmount });
-                      }}
-                    />
-                  </div>
-                )}
               </div>
 
               {/* Sort explainer */}
@@ -685,7 +619,7 @@ export default function Results() {
                                 trackLenderClicked({
                                   lenderName: offer.name,
                                   lenderRank: rankOffsets.leadStack + index + 1,
-                                  minRate: 5.99,
+                                  minRate: offer.minRate,
                                   estimatedPayment: 0,
                                   loanAmount,
                                 })
@@ -696,6 +630,14 @@ export default function Results() {
                               <ArrowRight className="w-4 h-4" />
                             </a>
                           </div>
+
+                          <LenderSavingsPanel
+                            lenderName={offer.name}
+                            defaultNewApr={offer.minRate}
+                            defaultOpen={false}
+                            loanAmount={loanAmount}
+                            variant="card"
+                          />
                         </div>
                       </div>
                     );
@@ -706,8 +648,6 @@ export default function Results() {
                   ─────────────────────────────────────────────────────────────────── */}
                   {roundSkyOffer && (() => {
                     const offer = roundSkyOffer;
-                    const savings = offerSavings.get(offer.id);
-                    const hasBestSavings = savings !== undefined && savings === bestSavings && bestSavings > 0;
                     const affiliateUrl = buildAffiliateUrl(offer, sessionClickId);
                     const rankPosition = rankOffsets.roundSky + 1;
 
@@ -735,11 +675,6 @@ export default function Results() {
                                     </span>
                                   )}
                                 </div>
-                                {hasBestSavings && savings !== undefined && (
-                                  <p className="text-sm text-emerald-600 font-semibold mt-0.5">
-                                    Save up to {formatCurrency(savings)} in interest
-                                  </p>
-                                )}
                               </div>
                             </div>
                             <div className="text-right shrink-0 ml-4">
@@ -799,6 +734,14 @@ export default function Results() {
                               <ArrowRight className="w-4 h-4" />
                             </a>
                           </div>
+
+                          <LenderSavingsPanel
+                            lenderName={offer.lenderName}
+                            defaultNewApr={offer.minRate}
+                            defaultOpen={false}
+                            loanAmount={loanAmount}
+                            variant="card"
+                          />
                         </div>
                       </div>
                     );
