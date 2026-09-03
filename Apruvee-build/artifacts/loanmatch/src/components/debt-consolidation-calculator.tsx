@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { Calculator, TrendingDown, Clock, DollarSign } from "lucide-react";
+import { Calculator, TrendingDown, Clock, DollarSign, ArrowRight } from "lucide-react";
 import {
   calculateMonthlyPayment,
   calculateTotalInterest,
@@ -14,6 +14,12 @@ export interface DebtConsolidationCalculatorValues {
   newApr: number;
   termMonths: number;
   isActive: boolean;
+}
+
+export interface DebtConsolidationCalculatorSecondaryCta {
+  label: string;
+  href: string;
+  onClick?: () => void;
 }
 
 export interface DebtConsolidationCalculatorProps {
@@ -35,6 +41,14 @@ export interface DebtConsolidationCalculatorProps {
   customFooter?: ReactNode;
   /** Message shown when the inputs are below the activation threshold (for compact mode). */
   inactiveMessage?: string;
+  /**
+   * Optional second call-to-action button, rendered between the results
+   * panel (New monthly payment / Total interest saved / Time to debt-free)
+   * and the "How we calculate" explainer text. Only shown when the default
+   * results panel renders — ignored in compact mode or when customFooter is
+   * set, since those replace this section entirely.
+   */
+  secondaryCta?: DebtConsolidationCalculatorSecondaryCta;
 }
 
 const TERM_OPTIONS = [24, 36, 48, 60, 72, 84];
@@ -54,6 +68,7 @@ export function DebtConsolidationCalculator({
   onInputsChange,
   customFooter,
   inactiveMessage,
+  secondaryCta,
 }: DebtConsolidationCalculatorProps) {
   const [debtInput, setDebtInput] = useState<string>(String(defaultDebt));
   const [currentAprInput, setCurrentAprInput] = useState<string>(String(defaultCurrentApr));
@@ -126,6 +141,12 @@ export function DebtConsolidationCalculator({
   const subTextCls = isHero ? "text-primary-foreground/90 text-sm" : "text-slate-600 text-sm";
   const inputBorderCls = isHero ? "border-transparent" : "border-slate-200";
   const inactiveTextCls = isHero ? "text-xs text-primary-foreground/70" : "text-xs text-slate-500";
+  // Secondary CTA styling inverts with variant, same logic as the badge/button
+  // pairing used elsewhere on the page: light button on the dark hero
+  // background, solid primary button on the plain white card background.
+  const secondaryCtaCls = isHero
+    ? "inline-flex items-center justify-center gap-2 w-full sm:w-auto px-6 py-3 rounded-xl font-semibold text-sm bg-white text-primary hover:bg-white/90 transition-colors shadow-sm"
+    : "inline-flex items-center justify-center gap-2 w-full sm:w-auto px-6 py-3 rounded-xl font-semibold text-sm bg-primary text-white hover:bg-primary/90 transition-colors shadow-sm";
 
   return (
     <div className={containerCls}>
@@ -285,6 +306,22 @@ export function DebtConsolidationCalculator({
                   isHero={isHero}
                 />
               </div>
+
+              {secondaryCta && (
+                <div className="mt-5">
+                  <a
+                    href={secondaryCta.href}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={secondaryCta.onClick}
+                    className={secondaryCtaCls}
+                  >
+                    {secondaryCta.label}
+                    <ArrowRight className="w-4 h-4" />
+                  </a>
+                </div>
+              )}
+
               <p
                 className={`mt-5 text-xs leading-relaxed ${
                   isHero ? "text-primary-foreground/80" : "text-slate-500"

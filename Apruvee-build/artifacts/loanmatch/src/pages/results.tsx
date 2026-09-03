@@ -181,12 +181,14 @@ function LenderSavingsPanel({
   defaultOpen,
   loanAmount,
   variant = "card",
+  secondaryCta,
 }: {
   lenderName: string;
   defaultNewApr: number;
   defaultOpen: boolean;
   loanAmount?: number;
   variant?: "card" | "hero";
+  secondaryCta?: { label: string; href: string; onClick?: () => void };
 }) {
   const [open, setOpen] = useState(defaultOpen);
   const hasTrackedOpen = useRef(false);
@@ -239,6 +241,7 @@ function LenderSavingsPanel({
             variant={variant}
             defaultDebt={loanAmount ?? 15000}
             defaultNewApr={defaultNewApr}
+            secondaryCta={secondaryCta}
             onInputsChange={(values) =>
               trackCalculatorUsed({
                 debt: values.debt,
@@ -515,6 +518,18 @@ export default function Results() {
                     defaultOpen={true}
                     loanAmount={loanAmount}
                     variant="hero"
+                    secondaryCta={{
+                      label: "Check My Rate",
+                      href: credibleUrl,
+                      onClick: () =>
+                        trackLenderClicked({
+                          lenderName: "Credible",
+                          lenderRank: rankOffsets.credible + 1,
+                          minRate: CREDIBLE_RATE,
+                          estimatedPayment: 0,
+                          loanAmount,
+                        }),
+                    }}
                   />
                 </div>
               </div>
