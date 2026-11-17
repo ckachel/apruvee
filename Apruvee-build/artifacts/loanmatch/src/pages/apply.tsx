@@ -25,12 +25,15 @@ type FormData = {
   consentToContact: boolean;
 };
 
-const LOAN_AMOUNTS = [
-  { label: "$1,000 – $5,000", value: 3000 },
+// Consolidation-sized amounts first; smaller requests are a de-emphasized
+// last option (Oct 2026). Credible data: median request was $2,500 and
+// almost none prequalified — see lib/lead-quality.ts.
+const LOAN_AMOUNTS: { label: string; value: number; secondary?: boolean }[] = [
   { label: "$5,000 – $10,000", value: 7500 },
   { label: "$10,000 – $20,000", value: 15000 },
   { label: "$20,000 – $35,000", value: 27500 },
   { label: "$35,000+", value: 50000 },
+  { label: "Less than $5,000", value: 3000, secondary: true },
 ];
 
 const LOAN_PURPOSES = [
@@ -87,7 +90,7 @@ export default function Apply() {
     trackApplyStepComplete({
       step,
       stepName: STEP_NAMES[step] ?? `step_${step}`,
-      loanAmount: data.loanAmount,
+      loanAmount: data.loanAmount ?? undefined,
       loanPurpose: data.loanPurpose,
       creditScore: data.creditScore,
     });
@@ -194,7 +197,7 @@ export default function Apply() {
                     </div>
                   </div>
                   <div className="space-y-3">
-                    {LOAN_AMOUNTS.map(({ label, value }) => (
+                    {LOAN_AMOUNTS.map(({ label, value, secondary }) => (
                       <button
                         key={value}
                         type="button"
@@ -202,7 +205,11 @@ export default function Apply() {
                           updateData({ loanAmount: value });
                           nextStep();
                         }}
-                        className="w-full text-left px-5 py-4 rounded-xl border-2 border-slate-200 hover:border-primary font-medium text-slate-700 hover:text-primary transition-all hover:bg-primary/5"
+                        className={
+                          secondary
+                            ? "w-full text-left px-5 py-3 rounded-xl border border-dashed border-slate-200 text-sm text-slate-500 hover:border-primary/40 hover:text-primary transition-all"
+                            : "w-full text-left px-5 py-4 rounded-xl border-2 border-slate-200 hover:border-primary font-medium text-slate-700 hover:text-primary transition-all hover:bg-primary/5"
+                        }
                       >
                         {label}
                       </button>

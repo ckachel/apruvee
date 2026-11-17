@@ -18,12 +18,14 @@ import {
 
 const TOTAL_STEPS = 7;
 
-const LOAN_AMOUNTS = [
-  { label: "$1,000 – $5,000", value: "3000" },
+// Consolidation-sized amounts first; smaller requests are a de-emphasized
+// last option (Oct 2026). See lib/lead-quality.ts.
+const LOAN_AMOUNTS: { label: string; value: string; secondary?: boolean }[] = [
   { label: "$5,000 – $10,000", value: "7500" },
   { label: "$10,000 – $20,000", value: "15000" },
   { label: "$20,000 – $35,000", value: "27500" },
   { label: "$35,000 – $50,000", value: "42500" },
+  { label: "Less than $5,000", value: "3000", secondary: true },
 ];
 
 const LOAN_PURPOSES = [
@@ -229,10 +231,12 @@ export default function ApplyLandingPage() {
               <h1 className="text-2xl md:text-3xl font-bold text-slate-900 mb-2">How much do you need?</h1>
               <p className="text-slate-500 mb-6">Select the amount you'd like to consolidate or borrow.</p>
               <div className="grid grid-cols-1 gap-3">
-                {LOAN_AMOUNTS.map(({ label, value }) => (
+                {LOAN_AMOUNTS.map(({ label, value, secondary }) => (
                   <button key={value} type="button"
                     onClick={() => { update("loanAmount", value); nextStep(); }}
-                    className={`w-full text-left px-5 py-4 rounded-xl border-2 font-medium transition-all ${form.loanAmount === value ? "border-primary bg-primary/5 text-primary" : "border-slate-200 bg-white text-slate-700 hover:border-primary/40"}`}>
+                    className={secondary
+                      ? `w-full text-left px-5 py-3 rounded-xl border border-dashed text-sm transition-all ${form.loanAmount === value ? "border-primary text-primary" : "border-slate-200 bg-white text-slate-500 hover:border-primary/40"}`
+                      : `w-full text-left px-5 py-4 rounded-xl border-2 font-medium transition-all ${form.loanAmount === value ? "border-primary bg-primary/5 text-primary" : "border-slate-200 bg-white text-slate-700 hover:border-primary/40"}`}>
                     {label}
                   </button>
                 ))}

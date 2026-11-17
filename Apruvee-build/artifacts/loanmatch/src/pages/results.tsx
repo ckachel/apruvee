@@ -12,6 +12,8 @@ import {
 import { formatCurrency } from "@/lib/loan-math";
 import { DebtConsolidationCalculator } from "@/components/debt-consolidation-calculator";
 import type { LenderOffer } from "@workspace/api-client-react";
+import { getAttribution, getLeadStackSource } from "@/lib/attribution";
+import { isCredibleEligible } from "@/lib/lead-quality";
 
 // Round Sky's affiliate base URL — subId3 is injected at render time with a
 // per-session UUID so each click is individually trackable without storing PII.
@@ -30,31 +32,21 @@ function buildAffiliateUrl(offer: LenderOffer, clickId: string): string {
 const CREDIBLE_BASE_URL =
   "https://www.credible.com/personal-loan-prequalification?utm_source=apruvee&utm_medium=referral&utm_campaign=personal_loans";
 
-// Optional aliases so Credible's utm_content uses Apruvee's preferred channel
-// name even when an ad platform's own utm_source differs (e.g. Microsoft Ads
-// traffic often arrives tagged utm_source=bing). Anything NOT listed here
-// passes through unchanged — a brand-new channel (e.g. "tiktok") works with
-// zero code changes, as long as its campaigns are tagged with that utm_source.
-const CREDIBLE_CHANNEL_ALIASES: Record<string, string> = {
-  bing: "microsoft",
-  facebook: "facebook_ads",
-  email: "crm",
-};
-
 /**
- * Reads utm_source off the current URL and maps it to the channel label
- * Credible's utm_content should carry. Falls back to "direct" if no
- * utm_source is present (e.g. someone lands here without campaign tagging).
+ * Credible click-out URL.
+ *
+ * utm_content = "<channel>.<clickId>" — Credible's partner report surfaces
+ * utm_content as "Partner Passed ID", which until Oct 2026 read "direct" on
+ * every row because the landing UTMs were lost before /results. The channel
+ * prefix keeps the report readable; the click ID lets each Credible row be
+ * joined back to an Apruvee visit (and its gclid) for offline conversion
+ * import. No PII — the click ID is a random UUID.
+ *
+ * TODO(Chris): confirm with Credible that utm_content is the field behind
+ * "Partner Passed ID" and that a ~45-char value isn't truncated/censored.
  */
-function getCredibleChannel(): string {
-  const params = new URLSearchParams(window.location.search);
-  const utmSource = (params.get("utm_source") || "").toLowerCase().trim();
-  if (!utmSource) return "direct";
-  return CREDIBLE_CHANNEL_ALIASES[utmSource] ?? utmSource;
-}
-
-function buildCredibleUrl(channel: string): string {
-  return `${CREDIBLE_BASE_URL}&utm_content=${encodeURIComponent(channel)}`;
+function buildCredibleUrl(channel: string, clickId: string): string {
+  return `${CREDIBLE_BASE_URL}&utm_content=${encodeURIComponent(`${channel}.${clickId}`)}`;
 }
 
 // Credible's lowest confirmed rate — used as the default "New Loan APR" for
@@ -138,20 +130,6 @@ const LEADSTACK_OFFERS: LeadStackOffer[] = [
 ];
 
 /**
- * Detects traffic source from utm_source query param.
- * Maps to a clean fixed set — raw UTM values are never passed to Lead Stack.
- */
-function detectTrafficSource(): string {
-  const params = new URLSearchParams(window.location.search);
-  const utm = (params.get("utm_source") || "").toLowerCase();
-  if (utm.includes("google")) return "google";
-  if (utm.includes("bing") || utm.includes("microsoft")) return "bing";
-  if (utm.includes("facebook") || utm.includes("meta")) return "meta";
-  if (utm.includes("organic") || utm === "seo") return "seo";
-  return "direct";
-}
-
-/**
  * Builds a fully-qualified Lead Stack click-out URL.
  * Params: &sub= (traffic source) and &sub2= (UUID click ID).
  * No PII in the URL — affiliate ID is pre-embedded in baseUrl by the portal.
@@ -199,11 +177,6 @@ function LenderSavingsPanel({
   useEffect(() => {
     if (defaultOpen && !hasTrackedOpen.current) {
       hasTrackedOpen.current = true;
-      // ASSUMPTION: trackCalculatorOpened/trackCalculatorUsed accept an
-      // optional lenderName field. I don't have @/lib/analytics' source, so
-      // this couldn't be verified against its actual type signature —
-      // please confirm before shipping, or drop lenderName from these calls
-      // if it isn't a recognized field.
       trackCalculatorOpened({ loanAmount, lenderName });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -294,17 +267,24 @@ export default function Results() {
     { query: { enabled: true, queryKey: getListOffersQueryKey({ loanAmount, creditScore, loanPurpose }) } }
   );
 
-  // One UUID per page-load — shared across all paid-partner links (Round Sky + Lead Stack).
-  const [sessionClickId] = useState<string>(() => crypto.randomUUID());
+  // Landing attribution captured in main.tsx before the apply flow rewrote the
+  // URL. One click ID per visit, shared across every partner link (Credible,
+  // Lead Stack, Round Sky) so all partner reports join on the same key.
+  const [attribution] = useState(() => getAttribution());
+  const sessionClickId = attribution.clickId;
+  const [trafficSource] = useState<string>(() => getLeadStackSource());
+  const credibleUrl = useMemo(
+    () => buildCredibleUrl(attribution.channel, attribution.clickId),
+    [attribution]
+  );
 
-  // Stable traffic source detection — runs once on mount.
-  const [trafficSource] = useState<string>(() => detectTrafficSource());
-
-  // Credible's utm_content — detected once per page load from utm_source, independent
-  // of Lead Stack's trafficSource (Lead Stack needs a fixed small enum; Credible's
-  // channel label is open-ended and passes through new utm_source values as-is).
-  const [credibleChannel] = useState<string>(() => getCredibleChannel());
-  const credibleUrl = useMemo(() => buildCredibleUrl(credibleChannel), [credibleChannel]);
+  // Quality gate: Credible is shown only to users its lending partners are
+  // likely to prequalify (see lib/lead-quality.ts). Everyone else still gets
+  // Lead Stack + Round Sky, which are built for smaller / lower-credit requests.
+  const showCredible = useMemo(
+    () => isCredibleEligible({ loanAmount, creditScore, loanPurpose }),
+    [loanAmount, creditScore, loanPurpose]
+  );
 
   const hasTrackedResults = useRef(false);
 
@@ -351,13 +331,12 @@ export default function Results() {
   // benefit. Re-add a section here only once a lender has a real, tracked
   // affiliate URL.
   const offerSections = useMemo(() => {
-    const sections: { key: string; count: number }[] = [
-      { key: "credible", count: 1 },
-      { key: "leadStack", count: LEADSTACK_OFFERS.length },
-    ];
+    const sections: { key: string; count: number }[] = [];
+    if (showCredible) sections.push({ key: "credible", count: 1 });
+    sections.push({ key: "leadStack", count: LEADSTACK_OFFERS.length });
     if (roundSkyOffer) sections.push({ key: "roundSky", count: 1 });
     return sections;
-  }, [roundSkyOffer]);
+  }, [showCredible, roundSkyOffer]);
 
   const rankOffsets = useMemo(() => {
     const offsets: Record<string, number> = {};
@@ -418,7 +397,9 @@ export default function Results() {
                   Given extra visual weight: "Featured Partner" label, heavier
                   ring/shadow, larger logo — to differentiate from the Lead Stack
                   cards below without touching rate/comparison language.
+                  Oct 2026: rendered only when showCredible (lib/lead-quality.ts).
               ─────────────────────────────────────────────────────────────────── */}
+              {showCredible && (
               <div className="bg-white rounded-2xl border-2 border-primary/40 ring-2 ring-primary/10 shadow-md overflow-hidden transition-shadow hover:shadow-lg">
                 <div className="bg-primary/5 border-b border-primary/10 px-6 py-1.5 flex items-center gap-1.5">
                   <Star className="w-3 h-3 text-primary fill-primary" />
@@ -533,6 +514,7 @@ export default function Results() {
                   />
                 </div>
               </div>
+              )}
 
               {/* Sort explainer */}
               <div className="bg-white rounded-xl border border-slate-200 px-4 py-3 text-xs text-slate-500">

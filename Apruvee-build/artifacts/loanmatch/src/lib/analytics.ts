@@ -1,3 +1,6 @@
+import { getAttribution } from "./attribution";
+import { getLeadTier, TIER_VALUES } from "./lead-quality";
+
 declare global {
   interface Window {
     dataLayer?: unknown[];
@@ -34,6 +37,14 @@ export function trackEvent(
 
 // ─── Lead Conversion ───────────────────────────────────────────────────────────
 
+// Google Ads "Qualified Lead" conversion action, as "AW-18161430115/<label>".
+// Create the action in Google Ads (Goals → Conversions → New → Website →
+// manual code), then set VITE_GADS_QUALIFIED_LEAD_SEND_TO in Railway. While
+// unset, the GA4 qualified_lead event still fires (and can be imported into
+// Google Ads from GA4 instead) but no Ads tag is sent.
+const GADS_QUALIFIED_LEAD_SEND_TO =
+  (import.meta.env.VITE_GADS_QUALIFIED_LEAD_SEND_TO as string | undefined) ?? "";
+
 export type LeadConversionParams = {
   loanAmount: number;
   loanPurpose: string;
@@ -42,20 +53,64 @@ export type LeadConversionParams = {
 };
 
 export function trackLeadConversion(params: LeadConversionParams): void {
+  const tier = getLeadTier(params);
+  const value = TIER_VALUES[tier];
+  const { clickId, channel } = getAttribution();
+
+  // Every completed form. Value is now tier-based (was the raw loan amount),
+  // so GA4 revenue-style reports reflect lead quality, not request size.
   trackEvent("generate_lead", {
     currency: "USD",
-    value: params.loanAmount,
+    value,
+    lead_tier: tier,
+    loan_amount: params.loanAmount,
     loan_purpose: params.loanPurpose,
     credit_score: params.creditScore,
     state: params.state,
+    click_id: clickId,
+    channel,
   });
 
-  // Google Ads — lead conversion (form completion)
+  // Google Ads — legacy form-completion tag. NOTE: send_to has no conversion
+  // label, so Google Ads does not attribute it to any conversion action; it is
+  // kept only so nothing that may depend on it breaks. Optimization should
+  // target the Qualified Lead action below.
   if (typeof window.gtag === "function") {
     window.gtag("event", "conversion", {
       send_to: "AW-18161430115",
-      value: 50,
+      value,
       currency: "USD",
+    });
+  }
+
+  if (tier === "credible_eligible") {
+    trackQualifiedLead({ ...params, value, clickId });
+  }
+}
+
+/**
+ * Fires only for Credible-eligible leads ($5K+, 640+ self-reported credit,
+ * debt consolidation / credit card payoff). Intended to become the PRIMARY
+ * Google Ads conversion so bidding favors approvable borrowers instead of
+ * any form-filler. See lib/lead-quality.ts.
+ */
+function trackQualifiedLead(params: LeadConversionParams & { value: number; clickId: string }): void {
+  trackEvent("qualified_lead", {
+    currency: "USD",
+    value: params.value,
+    loan_amount: params.loanAmount,
+    loan_purpose: params.loanPurpose,
+    credit_score: params.creditScore,
+    click_id: params.clickId,
+  });
+
+  if (GADS_QUALIFIED_LEAD_SEND_TO && typeof window.gtag === "function") {
+    window.gtag("event", "conversion", {
+      send_to: GADS_QUALIFIED_LEAD_SEND_TO,
+      value: params.value,
+      currency: "USD",
+      // Dedupe if the results page is reloaded or the form double-submits.
+      transaction_id: params.clickId,
     });
   }
 }
@@ -127,6 +182,8 @@ export function trackLenderClicked(params: {
     estimated_payment: params.estimatedPayment,
     loan_amount: params.loanAmount,
     currency: "USD",
+    // Same ID passed to the partner as its sub ID — joins GA4 to partner reports.
+    click_id: getAttribution().clickId,
   });
 
   // Google Ads — Lender Click conversion (AW-18161430115/t5KlCKj05LAcEOPchdRD)
@@ -141,9 +198,10 @@ export function trackLenderClicked(params: {
 
 // ─── Calculator Events ─────────────────────────────────────────────────────────
 
-export function trackCalculatorOpened(params?: { loanAmount?: number }): void {
+export function trackCalculatorOpened(params?: { loanAmount?: number; lenderName?: string }): void {
   trackEvent("calculator_opened", {
     loan_amount: params?.loanAmount,
+    lender_name: params?.lenderName,
   });
 }
 
@@ -151,11 +209,13 @@ export function trackCalculatorUsed(params: {
   debt: number;
   currentApr: number;
   loanAmount?: number;
+  lenderName?: string;
 }): void {
   trackEvent("calculator_used", {
     debt_amount: params.debt,
     current_apr: params.currentApr,
     loan_amount: params.loanAmount,
+    lender_name: params.lenderName,
   });
 }
 
